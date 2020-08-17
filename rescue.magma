@@ -1,0 +1,55 @@
+security_level := 40;
+field_size := 101;
+state_size := 7;
+s_box_power := 3;
+
+SetSeed(42);
+
+// will be set by rescue_init
+rescue_initialized := false;
+field := false;
+mds := false;
+constant_initial := false;
+constant_matrix := false;
+constant_key_gen := false;
+
+
+generate_mds := function (field, state_size)
+    p := PrimitiveElement(field);
+    mat := Matrix([[p^(i*j) : i in [1..state_size*2]] : j in [1..state_size]]);
+    mat := EchelonForm(mat);
+    return ColumnSubmatrix(mat, state_size + 1, state_size);
+end function;
+
+sample_constants := function (field, state_size)
+    // TODO
+    return 0;
+end function;
+
+procedure rescue_initialize (security_level, field_size, state_size, s_box_power)
+    assert Log(2, field_size) * state_size ge security_level;
+    assert Gcd(s_box_power, field_size - 1) ne 1;
+    field := FiniteField(field_size);
+    _, invalpha, _ :=  Xgcd(s_box_power, field_size - 1);
+    nb := Max([10, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
+    if s_box_power gt 3 then
+        nb := Max([10, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
+    end if;
+    mds := generate_mds(field, state_size);
+    constant_initial, constant_matrix, constant_key_gen := sample_constants(field, state_size);
+    initialized := true;
+end procedure; 
+
+rescue_encrypt := function (key, cleartext)
+    assert rescue_initialized;
+    ciphertext := cleartext;
+    // todo
+    return ciphertext;
+end function;
+
+rescue_decrypt := function (key, ciphertext)
+    assert rescue_initialized;
+    cleartext := ciphertext;
+    // todo
+    return cleartext;
+end function;
