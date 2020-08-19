@@ -9,6 +9,7 @@ vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
 mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
 
 random_non_subfield_value := function (prime_field)
+    assert IsPrime(#prime_field);
     while true do
         rand := Random(prime_field);
         if IsPrimitive(rand) then
@@ -56,6 +57,7 @@ rescue_initialize := function(security_level, field_size, state_size, s_box_powe
     return field, inv_s_box_power, mds, constant_initial, constant_matrix, constant_constants, num_rounds;
 end function;
 
+// initialize
 field, inv_s_box_power, mds, constant_initial, constant_matrix, constant_constants, num_rounds := rescue_initialize(security_level, field_size, state_size, s_box_power);
 
 rescue_encrypt := function (key, plaintext)
@@ -108,9 +110,14 @@ rescue_sponge := function (inputs, rate)
     return RowSubmatrix(state, rate);
 end function;
 
+// absolutely minimal testing
+test_rescue_encrypt := function ()
+    key := Matrix(field, state_size, 1, [0..6]);
+    pt := Matrix(field, state_size, 1, [40..46]);
+    return rescue_encrypt(key, pt);
+end function;
 
-key := Matrix(field, state_size, 1, [0..6]);
-pt := Matrix(field, state_size, 1, [40..46]);
-a := rescue_encrypt(key, pt);
-to_hash := Matrix(field, 31, 1, [0..30]);
-b := rescue_sponge(to_hash, 4);
+test_rescue_sponge := function ()
+    msg := Matrix(field, 31, 1, [0..30]);
+    return rescue_sponge(msg, 4);
+end function;
