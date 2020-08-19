@@ -93,8 +93,24 @@ rescue_decrypt := function (key, ciphertext)
     return data_state;
 end function;
 
+rescue_sponge := function (inputs, rate)
+    assert NumberOfColumns(inputs) eq 1;
+    assert BaseField(Parent(inputs)) eq field;
+    assert rate le state_size;
+    key := ZeroMatrix(field, state_size, 1);
+    state := ZeroMatrix(field, state_size, 1);
+    for i in [1..NumberOfRows(inputs) by rate] do
+        for j in [1..Min(rate, NumberOfRows(inputs) - i)] do
+            state[j, 1] := state[j, 1] + inputs[i+j, 1];
+        end for;
+        state := rescue_encrypt(key, state);
+    end for;
+    return RowSubmatrix(state, rate);
+end function;
+
 
 key := Matrix(field, state_size, 1, [0..6]);
 pt := Matrix(field, state_size, 1, [40..46]);
 a := rescue_encrypt(key, pt);
-
+to_hash := Matrix(field, 31, 1, [0..30]);
+b := rescue_sponge(to_hash, 4);
