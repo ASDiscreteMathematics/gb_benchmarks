@@ -1,5 +1,5 @@
 security_level := 40;
-field_size := 103;
+field_size := 101;
 state_size := 7;
 s_box_power := 3;
 
@@ -22,9 +22,12 @@ rescue_initialize := function(security_level, field_size, state_size, s_box_powe
     assert IsPrime(field_size);
     assert state_size ge 1;
     assert Log(2, field_size) * state_size ge security_level;
-    assert Gcd(s_box_power, field_size - 1) ne 1;
+    assert Gcd(s_box_power, field_size - 1) eq 1;
     field := FiniteField(field_size);
     _, inv_s_box_power, _ :=  Xgcd(s_box_power, field_size - 1);
+    while inv_s_box_power lt 0 do
+        inv_s_box_power := inv_s_box_power + field_size - 1;
+    end while;
     // determine number of rounds
     num_rounds := Max([10, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
     if s_box_power gt 3 then
@@ -89,6 +92,10 @@ rescue_encrypt := function (key, plaintext)
 end function;
 
 rescue_decrypt := function (key, ciphertext)
+    assert Parent(key) eq Parent(ciphertext);
+    assert Parent(key) eq Parent(constant_initial);
+    assert Type(key) eq Type(ciphertext);
+    assert Type(key) eq Type(constant_initial);
     key_state := key;
     data_state := ciphertext;
     // TODO
