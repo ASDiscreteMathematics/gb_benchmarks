@@ -1,9 +1,10 @@
-security_level := 40;
+security_level := 0;
 field_size := 101;
-state_size := 7;
+state_size := 2;
 s_box_power := 3;
 
 SetSeed(42);
+lower_number_of_rounds := true;
 
 vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
 mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
@@ -29,9 +30,13 @@ function rescue_initialize (security_level, field_size, state_size, s_box_power)
         inv_s_box_power := inv_s_box_power + field_size - 1;
     end while;
     // determine number of rounds
-    num_rounds := Max([10, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
+    min_rounds := 10;
+    if lower_number_of_rounds then
+        min_rounds := 2;
+    end if;
+    num_rounds := Max([min_rounds, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
     if s_box_power gt 3 then
-        num_rounds := Max([10, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
+        num_rounds := Max([min_rounds, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
     end if;
     // Generate MDS matrix
     p := PrimitiveElement(field);
@@ -68,6 +73,8 @@ function rescue_encrypt (key, plaintext)
     assert Parent(key) eq Parent(constant_initial);
     assert Type(key) eq Type(plaintext);
     assert Type(key) eq Type(constant_initial);
+    assert #ElementToSequence(key) eq state_size;
+    assert #ElementToSequence(plaintext) eq state_size;
 
     key_state := key;
     data_state := plaintext;
@@ -128,3 +135,45 @@ function test_rescue_sponge ()
     msg := Matrix(field, 31, 1, [0..30]);
     return rescue_sponge(msg, 4);
 end function;
+
+function polynomial_system (plaintext, ciphertext)
+    assert Parent(constant_initial) eq Parent(plaintext);
+    assert Parent(constant_initial) eq Parent(ciphertext);
+    assert Type(constant_initial) eq Type(plaintext);
+    assert Type(constant_initial) eq Type(ciphertext);
+    assert #ElementToSequence(plaintext) eq state_size;
+    assert #ElementToSequence(ciphertext) eq state_size;
+
+    num_vars := 2*num_rounds + 1;
+    num_vars *:= state_size;
+    P<[x]> := PolynomialRing(field, num_vars); // k_0 = P.[1..m], s_i = P.[i*m+1..(i+1)*m], k_i = P.[(i+1)*m+1..(i+2)*m]
+    mds_P := Matrix(P, NumberOfRows(mds), NumberOfColumns(mds), [P ! e : e in ElementToSequence(mds)]);
+    inv_mds_P := mds_P^(-1);
+    polynomial_equations := [];
+    c_0 := constant_initial;
+    c_1 := constant_matrix * c_0 + constant_constants;
+    k := Matrix(P, state_size, 1, [P.i : i in [0*state_size+1..1*state_size]]); // master key
+    s_r := Matrix(P, state_size, 1, [P.i : i in [1*state_size+1..2*state_size]]); // state "right" of current section
+    k_r := Matrix(P, state_size, 1, [P.i : i in [2*state_size+1..3*state_size]]); // key "right" of current section
+    polynomial_equations cat:= ElementToSequence(k + c_0 - mat_pow(inv_mds_P * (k_r - c_1), s_box_power)); // master key
+    polynomial_equations cat:= ElementToSequence(plaintext + mat_pow(inv_mds_P * (k_r - c_1), s_box_power) - mat_pow(inv_mds_P * (s_r - k_r), s_box_power)); // first step in first round
+    for rnd in [1..num_rounds-1] do // first step and last step are treated differently
+        c_0 := constant_matrix * c_1 + constant_constants; // even numbered...
+        c_1 := constant_matrix * c_0 + constant_constants; // ... and odd numbered round constant
+        s_l := s_r;
+        s_r := Matrix(P, state_size, 1, [P.i : i in [(2*rnd+1)*state_size+1..(2*rnd+2)*state_size]]);
+        k_l := k_r;
+        k_r := Matrix(P, state_size, 1, [P.i : i in [(2*rnd+2)*state_size+1..(2*rnd+3)*state_size]]);
+        k_m := mds_P * mat_pow(k_l, s_box_power) + c_0; // middle key, never an explicit variable
+        polynomial_equations cat:= ElementToSequence(k_m - mat_pow(inv_mds_P*(k_r - c_1), s_box_power)); // key schedule
+        polynomial_equations cat:= ElementToSequence(mds_P * mat_pow(s_l, s_box_power) + k_m - mat_pow(inv_mds_P * (s_r - k_r), s_box_power)); // second step of one round & first step of next round
+    end for;
+    c_0 := constant_matrix * c_1 + constant_constants;
+    polynomial_equations cat:= ElementToSequence(mds_P * mat_pow(s_r, s_box_power) + mds_P * mat_pow(k_r, s_box_power) + c_0 - ciphertext); // second step in last round
+    return polynomial_equations;
+end function;
+
+key := Matrix(field, state_size, 1, [1..state_size]);
+pt := Matrix(field, state_size, 1, [10..state_size + 9]);
+ct := rescue_encrypt(key, pt);
+eqs := polynomial_system(pt, ct);
