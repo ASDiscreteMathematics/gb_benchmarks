@@ -8,7 +8,7 @@ SetSeed(42);
 vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
 mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
 
-random_non_subfield_value := function (prime_field)
+function random_non_subfield_value (prime_field)
     assert IsPrime(#prime_field);
     while true do
         rand := Random(prime_field);
@@ -18,7 +18,7 @@ random_non_subfield_value := function (prime_field)
     end while;
 end function;
 
-rescue_initialize := function(security_level, field_size, state_size, s_box_power)
+function rescue_initialize (security_level, field_size, state_size, s_box_power)
     assert IsPrime(field_size);
     assert state_size ge 1;
     assert Log(2, field_size) * state_size ge security_level;
@@ -63,7 +63,7 @@ end function;
 // initialize
 field, inv_s_box_power, mds, constant_initial, constant_matrix, constant_constants, num_rounds := rescue_initialize(security_level, field_size, state_size, s_box_power);
 
-rescue_encrypt := function (key, plaintext)
+function rescue_encrypt (key, plaintext)
     assert Parent(key) eq Parent(plaintext);
     assert Parent(key) eq Parent(constant_initial);
     assert Type(key) eq Type(plaintext);
@@ -91,7 +91,7 @@ rescue_encrypt := function (key, plaintext)
     return data_state;
 end function;
 
-rescue_decrypt := function (key, ciphertext)
+function rescue_decrypt (key, ciphertext)
     assert Parent(key) eq Parent(ciphertext);
     assert Parent(key) eq Parent(constant_initial);
     assert Type(key) eq Type(ciphertext);
@@ -102,7 +102,7 @@ rescue_decrypt := function (key, ciphertext)
     return data_state;
 end function;
 
-rescue_sponge := function (inputs, rate)
+function rescue_sponge (inputs, rate)
     assert NumberOfColumns(inputs) eq 1;
     assert BaseField(Parent(inputs)) eq field;
     assert rate le state_size;
@@ -118,13 +118,13 @@ rescue_sponge := function (inputs, rate)
 end function;
 
 // absolutely minimal testing
-test_rescue_encrypt := function ()
+function test_rescue_encrypt ()
     key := Matrix(field, state_size, 1, [0..6]);
     pt := Matrix(field, state_size, 1, [40..46]);
     return rescue_encrypt(key, pt);
 end function;
 
-test_rescue_sponge := function ()
+function test_rescue_sponge ()
     msg := Matrix(field, 31, 1, [0..30]);
     return rescue_sponge(msg, 4);
 end function;
