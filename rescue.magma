@@ -68,7 +68,7 @@ end function;
 // initialize
 field, inv_s_box_power, mds, constant_initial, constant_matrix, constant_constants, num_rounds := rescue_initialize(security_level, field_size, state_size, s_box_power);
 
-function rescue_encrypt (key, plaintext)
+function rescue_encrypt (key, plaintext : sub_steps := false)
     assert Parent(key) eq Parent(plaintext);
     assert Parent(key) eq Parent(constant_initial);
     assert Type(key) eq Type(plaintext);
@@ -79,9 +79,12 @@ function rescue_encrypt (key, plaintext)
     key_state := key;
     data_state := plaintext;
 
-    key_injection := constant_initial;;
+    key_injection := constant_initial;
     key_state := key_state + key_injection;
     data_state := data_state + key_state;
+    all_constants := [key_injection];
+    all_keys := [key_state];
+    all_data := [data_state];
 
     for r in [1..2*num_rounds] do
         step_power := s_box_power;
@@ -93,8 +96,14 @@ function rescue_encrypt (key, plaintext)
         key_injection := constant_matrix * key_injection + constant_constants;
         key_state := mds * key_state + key_injection;
         data_state := mds * data_state + key_state;
+        Append(~all_constants, key_injection);
+        Append(~all_keys, key_state);
+        Append(~all_data, data_state);
     end for;
 
+    if sub_steps then
+        return data_state, all_constants, all_keys, all_data;
+    end if;
     return data_state;
 end function;
 
