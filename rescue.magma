@@ -30,13 +30,12 @@ function rescue_initialize (security_level, field_size, state_size, s_box_power)
         inv_s_box_power := inv_s_box_power + field_size - 1;
     end while;
     // determine number of rounds
-    min_rounds := 10;
-    if lower_number_of_rounds then
-        min_rounds := 2;
-    end if;
-    num_rounds := Max([min_rounds, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
+    num_rounds := Max([10, 2 * Ceiling( (security_level + 2) / (4 * state_size))]);
     if s_box_power gt 3 then
-        num_rounds := Max([min_rounds, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
+        num_rounds := Max([10, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
+    end if;
+    if lower_number_of_rounds then
+        num_rounds := 1;
     end if;
     // Generate MDS matrix
     p := PrimitiveElement(field);
