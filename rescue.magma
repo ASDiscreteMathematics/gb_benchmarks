@@ -87,7 +87,7 @@ function rescue_encrypt (key, plaintext : sub_steps := false)
 
     for r in [1..2*num_rounds] do
         step_power := s_box_power;
-        if r mod 2 eq 0 then
+        if r mod 2 eq 1 then
             step_power := inv_s_box_power;
         end if;
         key_state := mat_pow(key_state, step_power);
