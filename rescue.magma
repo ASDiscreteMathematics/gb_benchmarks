@@ -4,6 +4,7 @@ state_size := 2;
 s_box_power := 3;
 
 SetSeed(42);
+SetNthreads(8);
 lower_number_of_rounds := true;
 
 vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
