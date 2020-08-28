@@ -69,7 +69,7 @@ end function;
 // initialize
 field, inv_s_box_power, mds, constant_initial, constant_matrix, constant_constants, num_rounds := rescue_initialize(security_level, field_size, state_size, s_box_power);
 
-function rescue_encrypt (key, plaintext : sub_steps := false)
+function rescue_encrypt (key, plaintext : sub_steps := false, switch_s_boxes := false)
     assert Parent(key) eq Parent(plaintext);
     assert Parent(key) eq Parent(constant_initial);
     assert Type(key) eq Type(plaintext);
@@ -83,10 +83,16 @@ function rescue_encrypt (key, plaintext : sub_steps := false)
     all_constants := [key_injection];
     all_keys := [key_state];
     all_data := [data_state];
+    all_variables := [key];
+
+    index_of_inverse_s_box := 1;
+    if switch_s_boxes then
+        index_of_inverse_s_box := 0;
+    end if;
 
     for r in [1..2*num_rounds] do
         step_power := s_box_power;
-        if r mod 2 eq 1 then
+        if r mod 2 eq index_of_inverse_s_box then
             step_power := inv_s_box_power;
         end if;
         key_injection := constant_matrix * key_injection + constant_constants;
