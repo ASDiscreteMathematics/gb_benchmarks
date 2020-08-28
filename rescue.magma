@@ -101,10 +101,14 @@ function rescue_encrypt (key, plaintext : sub_steps := false, switch_s_boxes := 
         all_constants cat:= [key_injection];
         all_keys cat:= [key_state];
         all_data cat:= [data_state];
+        if sub_steps and r mod 2 eq index_of_inverse_s_box then
+            all_variables cat:= [data_state, key_state];
+        end if;
     end for;
 
     if sub_steps then
-        return data_state, all_constants, all_keys, all_data;
+        all_variables := [all_variables[i,j,1] : j in [1..#ElementToSequence(all_variables[i])], i in [1..#all_variables]];
+        return data_state, all_constants, all_keys, all_data, all_variables;
     end if;
     return data_state;
 end function;
@@ -190,7 +194,25 @@ function polynomial_system (plaintext, ciphertext : sub_steps := false)
     return polynomial_equations;
 end function;
 
+function test_polynomial_system (key, plaintext)
+    ciphertext, cs, ks, ds, vs := rescue_encrypt(key, plaintext : sub_steps := true);
+    eqs, css := polynomial_system(plaintext, ciphertext : sub_steps := true);
+    assert cs eq css;
+    return [Evaluate(eqs[i], ElementToSequence(vs)) : i in [1..#eqs]];
+end function;
+
+function polynomial_system_switched_s_boxes (plaintext, ciphertext : sub_steps := false)
+    num_vars := 2*num_rounds*state_size;
+    P<[y]> := PolynomialRing(field, num_vars);
+    mds_P := Matrix(P, NumberOfRows(mds), NumberOfColumns(mds), [P ! e : e in ElementToSequence(mds)]);
+    inv_mds_P := mds_P^(-1);
+end function;
+
 key := Matrix(field, state_size, 1, [1..state_size]);
-pt := Matrix(field, state_size, 1, [10..state_size + 9]);
-ct := rescue_encrypt(key, pt);
-eqs := polynomial_system(pt, ct);
+pt := Matrix(field, state_size, 1, [1..state_size]);
+ct, cs, ks, ds, vs := rescue_encrypt(key, pt : sub_steps := true);
+eqs, css := polynomial_system(pt, ct : sub_steps := true);
+eqs_tested := test_polynomial_system(key, pt);
+gb := GroebnerBasis(Ideal(eqs));
+v := Variety(Ideal(gb));
+dreg, _ := Max([Degree(gb[i]) : i in [1..#gb]]);
