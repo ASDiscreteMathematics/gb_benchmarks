@@ -7,6 +7,7 @@ num_lower_number_of_rounds := 4;
 SetSeed(42);
 SetNthreads(8);
 lower_number_of_rounds := true;
+order := "grevlex";
 
 vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
 mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
@@ -160,7 +161,7 @@ function polynomial_system (plaintext, ciphertext : sub_steps := false)
     assert #ElementToSequence(ciphertext) eq state_size;
 
     num_vars := (2*num_rounds + 1)*state_size;
-    P<[x]> := PolynomialRing(field, num_vars); // k_0 = P.[1..m], s_i = P.[i*m+1..(i+1)*m], k_i = P.[(i+1)*m+1..(i+2)*m]
+    P<[x]> := PolynomialRing(field, num_vars, order); // k_0 = P.[1..m], s_i = P.[i*m+1..(i+1)*m], k_i = P.[(i+1)*m+1..(i+2)*m]
     mds_P := Matrix(P, NumberOfRows(mds), NumberOfColumns(mds), [P ! e : e in ElementToSequence(mds)]);
     inv_mds_P := mds_P^(-1);
     polynomial_equations := [];
@@ -203,7 +204,7 @@ end function;
 
 function polynomial_system_switched_s_boxes (plaintext, ciphertext : sub_steps := false)
     num_vars := 2*num_rounds*state_size;
-    P<[y]> := PolynomialRing(field, num_vars);
+    P<[y]> := PolynomialRing(field, num_vars, order); // k, k_2, s_2, k_4, s_4, ..., k_(r-2), s_(r-2), k_r.
     mds_P := Matrix(P, NumberOfRows(mds), NumberOfColumns(mds), [P ! e : e in ElementToSequence(mds)]);
     inv_mds_P := mds_P^(-1);
 end function;
