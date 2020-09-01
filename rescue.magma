@@ -10,18 +10,7 @@ lower_number_of_rounds := true;
 switch_s_boxes := true;
 order := "grevlex";
 
-vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
-mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
-
-function random_non_subfield_value (prime_field)
-    assert IsPrime(#prime_field);
-    while true do
-        rand := Random(prime_field);
-        if IsPrimitive(rand) then
-            return rand;
-        end if;
-    end while;
-end function;
+import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
 
 function rescue_initialize (security_level, field_size, state_size, s_box_power)
     assert IsPrime(field_size);
@@ -41,10 +30,7 @@ function rescue_initialize (security_level, field_size, state_size, s_box_power)
     if lower_number_of_rounds then
         num_rounds := num_lower_number_of_rounds;
     end if;
-    // Generate MDS matrix
-    p := PrimitiveElement(field);
-    mds := Matrix([[p^(i*j) : i in [1..state_size*2]] : j in [1..state_size]]);
-    mds := ColumnSubmatrix(EchelonForm(mds), state_size + 1, state_size);
+    mds := generate_mds_matrix(field, state_size);
     // Sample initial constant vector
     constant_initial := [];
     repeat
