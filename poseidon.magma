@@ -41,9 +41,13 @@ end function;
 // initialize
 field, mds, round_constants, num_full_rounds, num_part_rounds := poseidon_initialize(security_level, field_size, state_size, s_box_power);
 
-function poseidon_permute (message)
+function poseidon_permute (message : mds_is_id := false)
     assert #ElementToSequence(message) eq state_size;
     permutext := Matrix(field, 1, state_size, ElementToSequence(message));
+    mds_to_use := mds;
+    if mds_is_id then
+        mds_to_use := IdentityMatrix(field, state_size);
+    end if;
     for r in [1..(num_full_rounds + num_part_rounds)] do
         // add round constants
         permutext := permutext + Matrix(round_constants[r]);
@@ -54,19 +58,28 @@ function poseidon_permute (message)
             permutext[1][state_size] := permutext[1][state_size]^s_box_power;
         end if;
         // mixlayer
-        permutext := permutext * mds;
+        permutext := permutext * mds_to_use;
     end for;
     return ElementToSequence(permutext);
 end function;
 
-function polynomial_system_last_squeeze (hash_digest)
+function polynomial_system_last_squeeze (hash_digest : unconstrained_input := false, mds_is_id := false, capacity_var := false)
     assert #hash_digest lt state_size;
-
+    capacity := 0;
+    if capacity_var then
+        capacity := state_size - #hash_digest;
+    end if;
     num_rounds := num_full_rounds + num_part_rounds;
-    num_vars := num_rounds * state_size;
+    num_vars := num_rounds * state_size + capacity;
     P<[x]> := PolynomialRing(field, num_vars, order); // s_i = P.[i*m+1..(i+1)*m], capacity_end = P.[r*m+1..r*m+c]
     polynomial_equations := [P.i : i in [#hash_digest+1..state_size]]; // capacity needs to be 0 at the start
-    polynomial_equations := []; // more relaxed system
+    if unconstrained_input then
+        polynomial_equations := []; // more relaxed system, all input can be whatever
+    end if;
+    mds_to_use := Matrix(P, mds);
+    if mds_is_id then
+        mds_to_use := IdentityMatrix(P, state_size);
+    end if;
     for r in [1..num_rounds] do
         round_vars := [P.i : i in [(r-1)*state_size+1..r*state_size]];
         round_vars := Matrix(1, state_size, round_vars);
@@ -76,36 +89,46 @@ function polynomial_system_last_squeeze (hash_digest)
         else // partial round
             round_vars[1][state_size] := round_vars[1][state_size]^s_box_power;
         end if;
-        round_vars := round_vars * Matrix(P, mds);
+        round_vars := round_vars * mds_to_use;
         if r lt num_rounds then
             round_next_vars := [P.i : i in [r*state_size+1..(r+1)*state_size]];
-            round_next_vars := Matrix(1, state_size, round_next_vars);
-        else
-            // last round
+        else // last round
             round_next_vars := hash_digest;
-            round_next_vars := Matrix(1, #hash_digest, round_next_vars); // rest are don't care
-            round_vars := Matrix(1, #hash_digest, ElementToSequence(round_vars)[1..#hash_digest]);
+            round_next_vars cat:= [P.i : i in [r*state_size+1..r*state_size+capacity]]; // maybe add variables for capacity at end
+            round_vars := Matrix(1, #round_next_vars, ElementToSequence(round_vars)[1..#round_next_vars]);
         end if;
-        
+        round_next_vars := Matrix(1, #round_next_vars, round_next_vars);
         polynomial_equations cat:= ElementToSequence(round_vars - round_next_vars);
     end for;
     return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
 end function;
 
 
-pt := [1, 1, 0];
-perm := poseidon_permute(pt);
-print(perm);
-hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
-system := polynomial_system_last_squeeze(hash);
-print(system);
-print(IsGroebner(system));
-I := Ideal(system);
-// SetVerbose("Groebner", 1);
-GB := GroebnerBasis(I);
-V := Variety(I);
-print(#V);
-for v in V do
-    w := [v[i] : i in [1..state_size]];
-    // print(w cat poseidon_permute(w));
+for unconstrained_input in [false, true] do
+    for mds_is_id in [false, true] do
+        for capacity_var in [false, true] do
+            message := [1, 1, 0];
+            perm := poseidon_permute(message : mds_is_id := mds_is_id);
+            hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
+            system := polynomial_system_last_squeeze(hash :
+                                                        unconstrained_input := unconstrained_input,
+                                                        mds_is_id := mds_is_id,
+                                                        capacity_var := capacity_var);
+            printf "\n —————————————\n" ;
+            printf "unconstrained_input: %o\n", unconstrained_input ;
+            printf "mds_is_id:           %o\n", mds_is_id ;
+            printf "capacity_var:        %o\n\n", capacity_var ;
+            printf "input:  %o\noutput: %o\n\n", message, perm ;
+            // print(system);
+            printf "is Gröbner: %o\n\n", IsGroebner(system) ;
+            if IsGroebner(system) then
+                V := Variety(Ideal(system));
+                V_partial := [[v[i] : i in [1..state_size]] : v in V];
+                assert #V_partial eq #V;
+                if not message in V_partial then
+                    print("System appears to be incorrect.");
+                end if;
+            end if;
+        end for;
+    end for;
 end for;
