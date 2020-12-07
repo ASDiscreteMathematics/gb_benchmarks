@@ -1,0 +1,111 @@
+security_level := 0;
+field_size := 101;
+s_box_power := 3;
+state_size := 3;
+num_lower_number_of_rounds := 4;
+
+SetSeed(42);
+SetNthreads(8);
+lower_number_of_rounds := true;
+order := "grevlex";
+
+import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
+
+function poseidon_initialize (security_level, field_size, state_size, s_box_power)
+    assert IsPrime(field_size);
+    assert state_size ge 1;
+    assert 2*state_size + 1 le field_size; // see Usenix Poseidon paper, Section 2.3, paragraph “The Linear Layer”
+    assert Log(2, field_size) * state_size ge security_level;
+    assert Gcd(s_box_power, field_size - 1) eq 1;
+    // field
+    field := FiniteField(field_size);
+    // generate mds matrix
+    // TODO see Usenix Poseidon paper, Section 2.3, paragraph “Avoiding Insecure Matrices”
+    mds := generate_mds_matrix(field, state_size);
+    // determine number of rounds
+    // TODO see https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/calc_round_numbers.py
+    assert IsEven(num_lower_number_of_rounds);
+    num_full_rounds := IntegerRing() ! (num_lower_number_of_rounds / 2);
+    num_part_rounds := IntegerRing() ! (num_lower_number_of_rounds / 2);
+    num_rounds := num_full_rounds + num_part_rounds;
+    assert IsEven(num_full_rounds);
+    // sample round constants
+    round_constants := [field | ]; // declare universe of sequence
+    repeat
+        Append(~round_constants, random_non_subfield_value(field));
+    until #round_constants eq num_rounds*state_size;
+    round_constants := Matrix(field, num_rounds, state_size, round_constants);
+    return field, mds, round_constants, num_full_rounds, num_part_rounds;
+end function;
+
+// initialize
+field, mds, round_constants, num_full_rounds, num_part_rounds := poseidon_initialize(security_level, field_size, state_size, s_box_power);
+
+function poseidon_permute (message)
+    assert #ElementToSequence(message) eq state_size;
+    permutext := Matrix(field, 1, state_size, ElementToSequence(message));
+    for r in [1..(num_full_rounds + num_part_rounds)] do
+        // add round constants
+        permutext := permutext + Matrix(round_constants[r]);
+        // sub words
+        if (r le num_full_rounds / 2) or (num_full_rounds / 2 + num_part_rounds lt r) then // full round
+            permutext := mat_pow(permutext, s_box_power);
+        else // partial round
+            permutext[1][state_size] := permutext[1][state_size]^s_box_power;
+        end if;
+        // mixlayer
+        permutext := permutext * mds;
+    end for;
+    return ElementToSequence(permutext);
+end function;
+
+function polynomial_system_last_squeeze (hash_digest)
+    assert #hash_digest lt state_size;
+
+    num_rounds := num_full_rounds + num_part_rounds;
+    num_vars := num_rounds * state_size;
+    P<[x]> := PolynomialRing(field, num_vars, order); // s_i = P.[i*m+1..(i+1)*m], capacity_end = P.[r*m+1..r*m+c]
+    polynomial_equations := [P.i : i in [#hash_digest+1..state_size]]; // capacity needs to be 0 at the start
+    polynomial_equations := []; // more relaxed system
+    for r in [1..num_rounds] do
+        round_vars := [P.i : i in [(r-1)*state_size+1..r*state_size]];
+        round_vars := Matrix(1, state_size, round_vars);
+        round_vars := round_vars + Matrix(round_constants[r]);
+        if (r le num_full_rounds / 2) or (num_full_rounds / 2 + num_part_rounds lt r) then // full round
+            round_vars := mat_pow(round_vars, s_box_power);
+        else // partial round
+            round_vars[1][state_size] := round_vars[1][state_size]^s_box_power;
+        end if;
+        round_vars := round_vars * Matrix(P, mds);
+        if r lt num_rounds then
+            round_next_vars := [P.i : i in [r*state_size+1..(r+1)*state_size]];
+            round_next_vars := Matrix(1, state_size, round_next_vars);
+        else
+            // last round
+            round_next_vars := hash_digest;
+            round_next_vars := Matrix(1, #hash_digest, round_next_vars); // rest are don't care
+            round_vars := Matrix(1, #hash_digest, ElementToSequence(round_vars)[1..#hash_digest]);
+        end if;
+        
+        polynomial_equations cat:= ElementToSequence(round_vars - round_next_vars);
+    end for;
+    return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
+end function;
+
+
+pt := [1, 1, 0];
+perm := poseidon_permute(pt);
+print(perm);
+hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
+system := polynomial_system_last_squeeze(hash);
+print(system);
+print(IsGroebner(system));
+I := Ideal(system);
+// SetVerbose("Groebner", 1);
+GB := GroebnerBasis(I);
+V := Variety(I);
+print(#V);
+for v in V do
+    w := [v[i] : i in [1..state_size]];
+    // print(w cat poseidon_permute(w));
+end for;
