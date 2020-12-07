@@ -1,0 +1,35 @@
+R_F := 4; // num_full_rounds
+R_P := 4; // num_part_rounds
+t := 3; // state size
+
+Z := IntegerRing();
+
+function perm (input_words,dd,part)
+    R_f := Z!(R_F / 2);
+    state_words := Vector(F,input_words);
+    for r in [1..R_f] do
+        for i in [1..t] do
+            state_words[i] := (state_words[i] + round_constants_field[t*(r-1)+i])^dd;
+        end for;
+        state_words := state_words * MDS_matrix_field;
+    end for;
+    for r in [1..R_P] do
+        for i in [1..t] do
+            state_words[i] := state_words[i] + round_constants_field[t*(R_f+r-1)+i];
+        end for;
+        for i in [1..part] do
+            state_words[i] := (state_words[i])^dd;
+        end for;
+        state_words := state_words * MDS_matrix_field;
+    end for;
+    for r in [1..(R_f-1)] do
+        for i in [1..t] do
+            state_words[i] := (state_words[i] + round_constants_field[t*(R_f+R_P+r-1)+i])^dd;
+        end for;
+        state_words := state_words * MDS_matrix_field;
+    end for;
+    for i in [1..t] do
+        state_words[i] := (state_words[i] + round_constants_field[t*(R_F+R_P-1)+i])^dd;
+    end for;
+    return state_words;
+end function;
