@@ -1,14 +1,14 @@
 security_level := 0;
 field_size := 101;
-state_size := 2;
 s_box_power := 3;
-num_lower_number_of_rounds := 4;
+state_size := 2;
+num_lower_number_of_rounds := 2;
 
 SetSeed(42);
 SetNthreads(8);
-lower_number_of_rounds := true;
-switch_s_boxes := true;
-order := "grevlex";
+lower_number_of_rounds := true; // artifitially decrease security level for analytic purposes
+switch_s_boxes := true; // Rescue_prime if enabled, plain old Rescue otherwise.
+order := "lex";
 
 import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
 
@@ -17,7 +17,9 @@ function rescue_initialize (security_level, field_size, state_size, s_box_power)
     assert state_size ge 1;
     assert Log(2, field_size) * state_size ge security_level;
     assert Gcd(s_box_power, field_size - 1) eq 1;
+    // field
     field := FiniteField(field_size);
+    // power of the inverse S-Box
     _, inv_s_box_power, _ :=  Xgcd(s_box_power, field_size - 1);
     while inv_s_box_power lt 0 do
         inv_s_box_power := inv_s_box_power + field_size - 1;
@@ -27,26 +29,27 @@ function rescue_initialize (security_level, field_size, state_size, s_box_power)
     if s_box_power gt 3 then
         num_rounds := Max([10, 2 * Ceiling( (security_level + 3) / (5.5 * state_size))]);
     end if;
-    if lower_number_of_rounds then
+    if lower_number_of_rounds and num_rounds gt num_lower_number_of_rounds then // artificially lower the number of rounds
         num_rounds := num_lower_number_of_rounds;
     end if;
+    // generate mds matrix
     mds := generate_mds_matrix(field, state_size);
-    // Sample initial constant vector
-    constant_initial := [];
+    // sample initial constant vector
+    constant_initial := [field | ]; // declare universe of sequence
     repeat
         Append(~constant_initial, random_non_subfield_value(field));
     until #constant_initial eq state_size;
     constant_initial := Matrix(field, state_size, 1, constant_initial);
-    // Sample constant matrix
+    // sample constant matrix
     repeat
-        constant_matrix := [];
+        constant_matrix := [field | ];
         repeat
             Append(~constant_matrix, random_non_subfield_value(field));
         until #constant_matrix eq state_size^2;
         constant_matrix := Matrix(field, state_size, state_size, constant_matrix);
     until IsInvertible(constant_matrix);
-    // Sample affine transformation of subsequent round constants
-    constant_constants := [];
+    // sample affine transformation of subsequent round constants
+    constant_constants := [field | ];
     repeat
         Append(~constant_constants, random_non_subfield_value(field));
     until #constant_constants eq state_size;
@@ -250,6 +253,7 @@ if switch_s_boxes then
     eqs, css := polynomial_system_switched_s_boxes(pt, ct : sub_steps := true);
 end if;
 eqs_tested := test_polynomial_system(key, pt : switch_s_boxes := switch_s_boxes);
+SetVerbose("Groebner", 3);
 gb := GroebnerBasis(Ideal(eqs));
 v := Variety(Ideal(gb));
 dreg := Max([Degree(gb[i]) : i in [1..#gb]]);
