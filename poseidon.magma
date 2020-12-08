@@ -82,7 +82,12 @@ function build_mds_weights (matrix_size : invert_mds := false, capacity_upper_le
     return mds_weights;
 end function;
 
-function polynomial_system_last_squeeze (hash_digest : unconstrained_input := false, mds_is_id := false, capacity_var := false, weight_order := false)
+function polynomial_system_last_squeeze (hash_digest :
+                                         unconstrained_input := false,
+                                         mds_is_id := false,
+                                         capacity_var := false,
+                                         weight_order := false,
+                                         invert_weight_mds := false)
     assert #hash_digest lt state_size;
     capacity := 0;
     if capacity_var then
@@ -92,7 +97,7 @@ function polynomial_system_last_squeeze (hash_digest : unconstrained_input := fa
     num_vars := num_rounds * state_size + capacity;
     P<[x]> := PolynomialRing(field, num_vars, order); // s_i = P.[i*m+1..(i+1)*m], capacity_end = P.[r*m+1..r*m+c]
     if weight_order then
-        weights := build_mds_weights(num_vars : invert_mds := true, capacity_upper_left := false);
+        weights := build_mds_weights(num_vars : invert_mds := invert_weight_mds, capacity_upper_left := false);
         P<[x]> := PolynomialRing(field, num_vars, "weight", weights);
     end if;
     polynomial_equations := [P.i : i in [#hash_digest+1..state_size]]; // capacity needs to be 0 at the start
@@ -117,7 +122,7 @@ function polynomial_system_last_squeeze (hash_digest : unconstrained_input := fa
             round_next_vars := [P.i : i in [r*state_size+1..(r+1)*state_size]];
         else // last round
             round_next_vars := hash_digest;
-            round_next_vars cat:= [P.i : i in [r*state_size+1..r*state_size+capacity]]; // maybe add variables for capacity at end
+            round_next_vars cat:= [P.i : i in [r*state_size+1..r*state_size+capacity]]; // maybe variables for capacity
             round_vars := Matrix(1, #round_next_vars, ElementToSequence(round_vars)[1..#round_next_vars]);
         end if;
         round_next_vars := Matrix(1, #round_next_vars, round_next_vars);
@@ -129,31 +134,36 @@ end function;
 
 for unconstrained_input in [false, true] do
     for mds_is_id in [false, true] do
-        for capacity_var in [false, true] do
+        for capacity_var in [false] do
             for weight_order in [false, true] do
-                message := [1, 1, 0];
-                perm := poseidon_permute(message : mds_is_id := mds_is_id);
-                hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
-                system := polynomial_system_last_squeeze(hash :
-                                                            unconstrained_input := unconstrained_input,
-                                                            mds_is_id := mds_is_id,
-                                                            capacity_var := capacity_var,
-                                                            weight_order := weight_order);
-                printf "\n —————————————\n" ;
-                printf "unconstrained_input: %o\n", unconstrained_input ;
-                printf "mds_is_id:           %o\n", mds_is_id ;
-                printf "capacity_var:        %o\n\n", capacity_var ;
-                printf "input:  %o\noutput: %o\n\n", message, perm ;
-                // print(system);
-                printf "is Gröbner: %o\n\n", IsGroebner(system) ;
-                if IsGroebner(system) then
-                    V := Variety(Ideal(system));
-                    V_partial := [[v[i] : i in [1..state_size]] : v in V];
-                    assert #V_partial eq #V;
-                    if not message in V_partial then
-                        print("System appears to be incorrect.");
+                for invert_weight_mds in [false, true] do
+                    message := [1, 1, 0];
+                    perm := poseidon_permute(message : mds_is_id := mds_is_id);
+                    hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
+                    system := polynomial_system_last_squeeze(hash :
+                                                             unconstrained_input := unconstrained_input,
+                                                             mds_is_id := mds_is_id,
+                                                             capacity_var := capacity_var,
+                                                             weight_order := weight_order,
+                                                             invert_weight_mds := invert_weight_mds);
+                    printf "\n —————————————\n" ;
+                    printf "unconstrained_input: %o\n", unconstrained_input ;
+                    printf "mds_is_id:           %o\n", mds_is_id ;
+                    printf "capacity_var:        %o\n", capacity_var ;
+                    printf "weight_order:        %o\n", weight_order ;
+                    printf "invert_mds:          %o\n\n", invert_weight_mds ;
+                    printf "input:  %o\noutput: %o\n\n", message, perm ;
+                    print(system);
+                    printf "is Gröbner: %o\n\n", IsGroebner(system) ;
+                    if IsGroebner(system) then
+                        V := Variety(Ideal(system));
+                        V_partial := [[v[i] : i in [1..state_size]] : v in V];
+                        assert #V_partial eq #V;
+                        if not message in V_partial then
+                            print("[!!!] polynomial system probably incorrect.");
+                        end if;
                     end if;
-                end if;
+                end for;
             end for;
         end for;
     end for;
