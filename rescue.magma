@@ -245,6 +245,7 @@ function test_polynomial_system (key, plaintext : switch_s_boxes := false)
     return [Evaluate(eqs[i], ElementToSequence(vs)) : i in [1..#eqs]];
 end function;
 
+SetNthreads(8);
 key := Matrix(field, state_size, 1, [1..state_size]);
 pt := Matrix(field, state_size, 1, [1..state_size]);
 ct, cs, ks, ds, vs := rescue_encrypt(key, pt : sub_steps := true, switch_s_boxes:= switch_s_boxes);

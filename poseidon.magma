@@ -140,7 +140,7 @@ function polynomial_system_last_squeeze (hash_digest :
     return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
 end function;
 
-
+SetNthreads(8);
 for unconstrained_input in [false] do
     for mds_is_id in [false] do
         for capacity_var in [false] do
