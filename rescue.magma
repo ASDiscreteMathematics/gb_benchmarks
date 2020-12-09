@@ -151,7 +151,7 @@ function test_rescue_sponge ()
     return rescue_sponge(msg, 4);
 end function;
 
-function polynomial_system (plaintext, ciphertext : sub_steps := false)
+function polynomial_system (plaintext, ciphertext : sub_steps := false, make_round_gbs := false)
     assert num_rounds ge 1;
     assert Parent(constant_initial) eq Parent(plaintext);
     assert Parent(constant_initial) eq Parent(ciphertext);
@@ -183,8 +183,16 @@ function polynomial_system (plaintext, ciphertext : sub_steps := false)
         k_l := k_r;
         k_r := Matrix(P, state_size, 1, [P.i : i in [(2*rnd+2)*state_size+1..(2*rnd+3)*state_size]]);
         k_m := mds_P * mat_pow(k_l, s_box_power) + c_0; // middle key, never an explicit variable
-        polynomial_equations cat:= ElementToSequence(k_m - mat_pow(inv_mds_P*(k_r - c_1), s_box_power)); // key schedule
-        polynomial_equations cat:= ElementToSequence(mds_P * mat_pow(s_l, s_box_power) + k_m - mat_pow(inv_mds_P * (s_r - k_r), s_box_power)); // second step of one round & first step of next round
+        round_equations := ElementToSequence(k_m - mat_pow(inv_mds_P*(k_r - c_1), s_box_power)); // key schedule
+        if make_round_gbs then
+            round_equations := GroebnerBasis(round_equations);
+        end if;
+        polynomial_equations cat:= round_equations;
+        round_equations := ElementToSequence(mds_P * mat_pow(s_l, s_box_power) + k_m - mat_pow(inv_mds_P * (s_r - k_r), s_box_power)); // second step of one round & first step of next round
+        if make_round_gbs then
+            round_equations := GroebnerBasis(round_equations);
+        end if;
+        polynomial_equations cat:= round_equations;
     end for;
     c_0 := constant_matrix * c_1 + constant_constants;
     all_constants cat:= [c_0];
@@ -195,7 +203,7 @@ function polynomial_system (plaintext, ciphertext : sub_steps := false)
     return polynomial_equations;
 end function;
 
-function polynomial_system_switched_s_boxes (plaintext, ciphertext : sub_steps := false)
+function polynomial_system_switched_s_boxes (plaintext, ciphertext : sub_steps := false, make_round_gbs := false)
     assert num_rounds ge 1;
     assert Parent(constant_initial) eq Parent(plaintext);
     assert Parent(constant_initial) eq Parent(ciphertext);
@@ -226,8 +234,16 @@ function polynomial_system_switched_s_boxes (plaintext, ciphertext : sub_steps :
         k_l := k_r;
         k_r := Matrix(P, state_size, 1, [P.i : i in [(2*rnd-1)*state_size+1..2*rnd*state_size]]);
         k_mid := mds_P*mat_pow(k_l, s_box_power) + c_1;
-        polynomial_equations cat:= ElementToSequence(k_mid - mat_pow(inv_mds_P*(k_r - c_0), s_box_power));
-        polynomial_equations cat:= ElementToSequence(mds_P*mat_pow(s_l, s_box_power) + k_mid - mat_pow(inv_mds_P*(s_r - k_r), s_box_power));
+        round_equations := ElementToSequence(k_mid - mat_pow(inv_mds_P*(k_r - c_0), s_box_power));
+        if make_round_gbs then
+            round_equations := GroebnerBasis(round_equations);
+        end if;
+        polynomial_equations cat:= round_equations;
+        round_equations := ElementToSequence(mds_P*mat_pow(s_l, s_box_power) + k_mid - mat_pow(inv_mds_P*(s_r - k_r), s_box_power));
+        if make_round_gbs then
+            round_equations := GroebnerBasis(round_equations);
+        end if;
+        polynomial_equations cat:= round_equations;
     end for;
     if sub_steps then
         return polynomial_equations, all_constants;
