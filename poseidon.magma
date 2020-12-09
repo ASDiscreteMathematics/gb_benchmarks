@@ -88,7 +88,8 @@ function polynomial_system_last_squeeze (hash_digest :
                                          capacity_var := false,
                                          weight_order := false,
                                          invert_weight_mds := false,
-                                         make_round_gbs := false)
+                                         make_round_gbs := false,
+                                         keep_gb := false)
     assert #hash_digest lt state_size;
     capacity := 0;
     if capacity_var then
@@ -132,6 +133,9 @@ function polynomial_system_last_squeeze (hash_digest :
             round_eqs := GroebnerBasis(round_eqs);
         end if;
         polynomial_equations cat:= round_eqs;
+        if keep_gb then
+            polynomial_equations := GroebnerBasis(polynomial_equations);
+        end if;
     end for;
     return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
 end function;
@@ -143,35 +147,38 @@ for unconstrained_input in [false] do
             for weight_order in [false] do
                 for invert_weight_mds in [false] do
                     for make_round_gbs in [true] do
-                        message := [1, 1, 0];
-                        perm := poseidon_permute(message : mds_is_id := mds_is_id);
-                        hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
-                        system := polynomial_system_last_squeeze(hash :
-                                                                 unconstrained_input := unconstrained_input,
-                                                                 mds_is_id := mds_is_id,
-                                                                 capacity_var := capacity_var,
-                                                                 weight_order := weight_order,
-                                                                 invert_weight_mds := invert_weight_mds,
-                                                                 make_round_gbs := make_round_gbs);
-                        printf "\n —————————————\n" ;
-                        printf "unconstrained_input: %o\n", unconstrained_input ;
-                        printf "mds_is_id:           %o\n", mds_is_id ;
-                        printf "make_round_gbs:      %o\n", make_round_gbs ;
-                        printf "capacity_var:        %o\n", capacity_var ;
-                        printf "weight_order:        %o\n", weight_order ;
-                        printf "invert_mds:          %o\n\n", invert_weight_mds ;
-                        printf "input:  %o\noutput: %o\n\n", message, perm ;
-                        print(system);
-                        printf "is Gröbner: %o\n\n", IsGroebner(system) ;
-                        print(GroebnerBasis(system));
-                        if IsGroebner(system) then
-                            V := Variety(Ideal(system));
-                            V_partial := [[v[i] : i in [1..state_size]] : v in V];
-                            assert #V_partial eq #V;
-                            if not message in V_partial then
-                                print("[!!!] polynomial system probably incorrect.");
+                        for keep_gb in [false] do
+                            message := [1, 1, 0];
+                            perm := poseidon_permute(message : mds_is_id := mds_is_id);
+                            hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
+                            system := polynomial_system_last_squeeze(hash :
+                                                                     unconstrained_input := unconstrained_input,
+                                                                     mds_is_id := mds_is_id,
+                                                                     capacity_var := capacity_var,
+                                                                     weight_order := weight_order,
+                                                                     invert_weight_mds := invert_weight_mds,
+                                                                     make_round_gbs := make_round_gbs,
+                                                                     keep_gb := keep_gb);
+                            printf "\n —————————————\n" ;
+                            printf "unconstrained_input: %o\n", unconstrained_input ;
+                            printf "mds_is_id:           %o\n", mds_is_id ;
+                            printf "make_round_gbs:      %o\n", make_round_gbs ;
+                            printf "keep_gb:             %o\n", keep_gb ;
+                            printf "capacity_var:        %o\n", capacity_var ;
+                            printf "weight_order:        %o\n", weight_order ;
+                            printf "invert_mds:          %o\n\n", invert_weight_mds ;
+                            printf "input:  %o\noutput: %o\n\n", message, perm ;
+                            print(system);
+                            printf "is Gröbner: %o\n\n", IsGroebner(system) ;
+                            if IsGroebner(system) then
+                                V := Variety(Ideal(system));
+                                V_partial := [[v[i] : i in [1..state_size]] : v in V];
+                                assert #V_partial eq #V;
+                                if not message in V_partial then
+                                    print("[!!!] polynomial system probably incorrect.");
+                                end if;
                             end if;
-                        end if;
+                        end for;
                     end for;
                 end for;
             end for;
