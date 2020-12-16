@@ -1,6 +1,8 @@
 
-vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)])>;
-mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)])>;
+vec_pow := func< vec, pow | Vector([i^pow : i in ElementToSequence(vec)]) >;
+mat_pow := func< mat, pow | Matrix(NumberOfRows(mat), NumberOfColumns(mat), [i^pow : i in ElementToSequence(mat)]) >;
+
+d_reg := func< gb | Max([Degree(gb[i]) : i in [1..#gb]]) >;
 
 function random_non_subfield_value (prime_field)
     assert IsPrime(#prime_field);
@@ -15,6 +17,8 @@ end function;
 function generate_mds_matrix (field, size)
     p := PrimitiveElement(field);
     mds := Matrix([[p^(i*j) : i in [1..size*2]] : j in [1..size]]);
-    mds := ColumnSubmatrix(EchelonForm(mds), size + 1, size);
+    mds := EchelonForm(mds);
+    mds := ColumnSubmatrix(mds, size + 1, size);
+    mds := Transpose(mds);
     return mds;
 end function;
