@@ -114,7 +114,8 @@ function polynomial_system_last_squeeze (hash_digest :
                                          unconstrained_input := false,
                                          mds_is_id := false,
                                          capacity_var := false,
-                                         make_round_gbs := false)
+                                         make_round_gbs := false,
+                                         keep_gb := false)
     assert #hash_digest eq rate;
 
     num_vars := num_rounds*state_size + capacity;
@@ -152,6 +153,9 @@ function polynomial_system_last_squeeze (hash_digest :
         else
             polynomial_equations cat:= ElementToSequence(round_equations)[1..rate];
         end if;
+        if keep_gb then
+            polynomial_equations := GroebnerBasis(polynomial_equations);
+        end if;
     end for;
     return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
 end function;
@@ -161,34 +165,38 @@ for unconstrained_input in [false, true] do
     for mds_is_id in [false, true] do
         for capacity_var in [false, true] do
             for make_round_gbs in [false, true] do
-                message := [1..rate] cat [0 : i in [rate+1..state_size]];
-                perm := rescue_xlix(message : mds_is_id := mds_is_id);
-                hash := perm[1..rate];
-                system := polynomial_system_last_squeeze(hash :
-                                                         unconstrained_input := unconstrained_input,
-                                                         mds_is_id := mds_is_id,
-                                                         capacity_var := capacity_var,
-                                                         make_round_gbs := make_round_gbs);
-                printf "\n —————————————\n" ;
-                printf "unconstrained_input: %o\n", unconstrained_input ;
-                printf "mds_is_id:           %o\n", mds_is_id ;
-                printf "make_round_gbs:      %o\n", make_round_gbs ;
-                printf "capacity_var:        %o\n\n", capacity_var ;
-                printf "input:  %o\noutput: %o\n", message, perm ;
-                print(system);
-                printf "is Gröbner: %o\n\n", IsGroebner(system) ;
-                // SetVerbose("Groebner", 1);
-                // SetVerbose("FGLM", 3);
-                system := GroebnerBasis(system);
-                // d_reg(system);
-                if IsGroebner(system) then
-                    V := Variety(Ideal(system));
-                    V_partial := [[v[i] : i in [1..state_size]] : v in V];
-                    assert #V_partial eq #V;
-                    if not message in V_partial then
-                        print("[!!!] polynomial system probably incorrect.");
+                for keep_gb in [false, true] do
+                    message := [1..rate] cat [0 : i in [rate+1..state_size]];
+                    perm := rescue_xlix(message : mds_is_id := mds_is_id);
+                    hash := perm[1..rate];
+                    system := polynomial_system_last_squeeze(hash :
+                                                             unconstrained_input := unconstrained_input,
+                                                             mds_is_id := mds_is_id,
+                                                             capacity_var := capacity_var,
+                                                             make_round_gbs := make_round_gbs,
+                                                             keep_gb := keep_gb);
+                    printf "\n —————————————\n" ;
+                    printf "unconstrained_input: %o\n", unconstrained_input ;
+                    printf "mds_is_id:           %o\n", mds_is_id ;
+                    printf "make_round_gbs:      %o\n", make_round_gbs ;
+                    printf "keep_gb:             %o\n", keep_gb ;
+                    printf "capacity_var:        %o\n\n", capacity_var ;
+                    printf "input:  %o\noutput: %o\n", message, perm ;
+                    print(system);
+                    printf "is Gröbner: %o\n\n", IsGroebner(system) ;
+                    // SetVerbose("Groebner", 1);
+                    // SetVerbose("FGLM", 3);
+                    system := GroebnerBasis(system);
+                    // d_reg(system);
+                    if IsGroebner(system) then
+                        V := Variety(Ideal(system));
+                        V_partial := [[v[i] : i in [1..state_size]] : v in V];
+                        assert #V_partial eq #V;
+                        if not message in V_partial then
+                            print("[!!!] polynomial system probably incorrect.");
+                        end if;
                     end if;
-                end if;
+                end for;
             end for;
         end for;
     end for;
