@@ -1,45 +1,48 @@
-security_level := 0;
+// Primary parameters
 field_size := 101;
-s_box_power := 3;
 state_size := 3;
-num_lower_number_of_rounds := 4;
+s_box_power := 3;
+security_level :=  0;
+
+order := "grevlex";
+is_low_round_number := true; // artifitially decrease security level for analytic purposes
+num_lower_rounds := 4;
 
 SetSeed(42);
 SetNthreads(8);
-lower_number_of_rounds := true;
-order := "grevlex";
 
 import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
 
-function poseidon_initialize (security_level, field_size, state_size, s_box_power)
+function poseidon_initialize (field_size, state_size, s_box_power, security_level)
     assert IsPrime(field_size);
-    assert state_size ge 1;
+    assert state_size gt 1;
     assert 2*state_size + 1 le field_size; // see Usenix Poseidon paper, Section 2.3, paragraph “The Linear Layer”
     assert Log(2, field_size) * state_size ge security_level;
     assert Gcd(s_box_power, field_size - 1) eq 1;
-    // field
+
     field := FiniteField(field_size);
-    // generate mds matrix
+
     // TODO see Usenix Poseidon paper, Section 2.3, paragraph “Avoiding Insecure Matrices”
     mds := generate_mds_matrix(field, state_size);
-    // determine number of rounds
+
     // TODO see https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/calc_round_numbers.py
-    assert IsEven(num_lower_number_of_rounds);
-    num_full_rounds := IntegerRing() ! (num_lower_number_of_rounds / 2);
-    num_part_rounds := IntegerRing() ! (num_lower_number_of_rounds / 2);
+    assert IsEven(num_lower_rounds);
+    num_full_rounds := Integers() ! (num_lower_rounds / 2);
+    num_part_rounds := Integers() ! (num_lower_rounds / 2);
     num_rounds := num_full_rounds + num_part_rounds;
     assert IsEven(num_full_rounds);
-    // sample round constants
-    round_constants := [field | ]; // declare universe of sequence
-    repeat
-        Append(~round_constants, random_non_subfield_value(field));
-    until #round_constants eq num_rounds*state_size;
+
+    round_constants := [field | ];
+    while #round_constants ne num_rounds*state_size do
+        round_constants cat:= [random_non_subfield_value(field)];
+    end while;
     round_constants := Matrix(field, num_rounds, state_size, round_constants);
+
     return field, mds, round_constants, num_full_rounds, num_part_rounds;
 end function;
 
 // initialize
-field, mds, round_constants, num_full_rounds, num_part_rounds := poseidon_initialize(security_level, field_size, state_size, s_box_power);
+field, mds, round_constants, num_full_rounds, num_part_rounds := poseidon_initialize(field_size, state_size, s_box_power, security_level);
 
 function poseidon_permute (message : mds_is_id := false)
     assert #ElementToSequence(message) eq state_size;
@@ -78,7 +81,7 @@ function build_mds_weights (matrix_size : invert_mds := false, capacity_upper_le
     mds_weight_matrix := DiagonalJoin([mds_to_use : i in [1..divid]]);
     mds_weight_matrix := DiagonalJoin(mds_weight_matrix, trailing_matrix);
     mds_weights := ElementToSequence(mds_weight_matrix);
-    mds_weights := [IntegerRing() ! w : w in mds_weights];
+    mds_weights := [Integers() ! w : w in mds_weights];
     return mds_weights;
 end function;
 
@@ -91,6 +94,7 @@ function polynomial_system_last_squeeze (hash_digest :
                                          make_round_gbs := false,
                                          keep_gb := false)
     assert #hash_digest lt state_size;
+
     capacity := 0;
     if capacity_var then
         capacity := state_size - #hash_digest;
@@ -140,8 +144,8 @@ function polynomial_system_last_squeeze (hash_digest :
     return [poly / LeadingCoefficient(poly) : poly in polynomial_equations];
 end function;
 
-SetNthreads(8);
-for unconstrained_input in [false] do
+
+for unconstrained_input in [true] do
     for mds_is_id in [false] do
         for capacity_var in [false] do
             for weight_order in [false] do
@@ -167,9 +171,12 @@ for unconstrained_input in [false] do
                             printf "capacity_var:        %o\n", capacity_var ;
                             printf "weight_order:        %o\n", weight_order ;
                             printf "invert_mds:          %o\n\n", invert_weight_mds ;
-                            printf "input:  %o\noutput: %o\n\n", message, perm ;
+                            printf "input:  %o\noutput: %o\n", message, perm ;
                             print(system);
                             printf "is Gröbner: %o\n\n", IsGroebner(system) ;
+                            SetVerbose("Groebner", 2);
+                            SetVerbose("FGLM", 3);
+                            system := GroebnerBasis(system);
                             if IsGroebner(system) then
                                 V := Variety(Ideal(system));
                                 V_partial := [[v[i] : i in [1..state_size]] : v in V];
