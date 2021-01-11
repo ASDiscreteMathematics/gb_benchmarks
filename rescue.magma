@@ -177,6 +177,7 @@ for unconstrained_input in [false, true] do
                                                              make_round_gbs := make_round_gbs,
                                                              keep_gb := keep_gb);
                     printf "\n —————————————\n" ;
+                    printf "monomial order:      %o\n", order ;
                     printf "unconstrained_input: %o\n", unconstrained_input ;
                     printf "mds_is_id:           %o\n", mds_is_id ;
                     printf "make_round_gbs:      %o\n", make_round_gbs ;
