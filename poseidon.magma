@@ -10,6 +10,7 @@ num_lower_rounds := 4;
 
 SetSeed(42);
 SetNthreads(8);
+check_gb_consistency := false;
 
 import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
 
@@ -177,7 +178,8 @@ for unconstrained_input in [true] do
                             SetVerbose("Groebner", 2);
                             SetVerbose("FGLM", 3);
                             system := GroebnerBasis(system);
-                            if IsGroebner(system) then
+                            if check_gb_consistency then
+                                print("executing consistency check …");
                                 V := Variety(Ideal(system));
                                 V_partial := [[v[i] : i in [1..state_size]] : v in V];
                                 assert #V_partial eq #V;
