@@ -12,7 +12,7 @@ SetSeed(42);
 SetNthreads(8);
 check_gb_consistency := false;
 
-import "common.magma" : vec_pow, mat_pow, d_reg, random_non_subfield_value, generate_mds_matrix;
+import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound;
 
 function rescue_initialize (field_size, state_size, capacity, security_level)
     assert IsPrime(field_size);
@@ -182,13 +182,17 @@ for unconstrained_input in [false, true] do
                     printf "mds_is_id:           %o\n", mds_is_id ;
                     printf "make_round_gbs:      %o\n", make_round_gbs ;
                     printf "keep_gb:             %o\n", keep_gb ;
-                    printf "capacity_var:        %o\n\n", capacity_var ;
+                    printf "capacity_var:        %o\n", capacity_var ;
+                    printf "\n";
                     printf "input:  %o\noutput: %o\n", message, perm ;
                     print(system);
-                    printf "is Gröbner: %o\n\n", IsGroebner(system) ;
-                    // SetVerbose("Groebner", 1);
-                    // SetVerbose("FGLM", 3);
+                    printf "is Gröbner:           %o\n", IsGroebner(system) ;
+                    printf "macaulay bound:       %o\n", macaulay_bound(system);
+                    SetVerbose("Groebner", 0);
+                    SetVerbose("FGLM", 0);
                     system := GroebnerBasis(system);
+                    printf "degree of regularity: %o\n", d_reg(system);
+                    printf "\n";
                     // d_reg(system);
                     if check_gb_consistency then
                         print("executing consistency check …");

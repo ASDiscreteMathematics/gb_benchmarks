@@ -12,7 +12,7 @@ SetSeed(42);
 SetNthreads(8);
 check_gb_consistency := false;
 
-import "common.magma" : vec_pow, mat_pow, random_non_subfield_value, generate_mds_matrix;
+import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound;
 
 function poseidon_initialize (field_size, state_size, s_box_power, security_level)
     assert IsPrime(field_size);
@@ -172,13 +172,16 @@ for unconstrained_input in [true] do
                             printf "keep_gb:             %o\n", keep_gb ;
                             printf "capacity_var:        %o\n", capacity_var ;
                             printf "weight_order:        %o\n", weight_order ;
-                            printf "invert_mds:          %o\n\n", invert_weight_mds ;
+                            printf "invert_mds:          %o\n", invert_weight_mds ;
+                            printf "\n";
                             printf "input:  %o\noutput: %o\n", message, perm ;
                             print(system);
-                            printf "is Gröbner: %o\n\n", IsGroebner(system) ;
-                            SetVerbose("Groebner", 2);
-                            SetVerbose("FGLM", 3);
+                            printf "is Gröbner:           %o\n", IsGroebner(system) ;
+                            printf "macaulay bound:       %o\n", macaulay_bound(system);
+                            SetVerbose("Groebner", 0);
+                            SetVerbose("FGLM", 0);
                             system := GroebnerBasis(system);
+                            printf "degree of regularity: %o\n", d_reg(system);
                             if check_gb_consistency then
                                 print("executing consistency check …");
                                 V := Variety(Ideal(system));
