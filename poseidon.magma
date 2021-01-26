@@ -155,6 +155,7 @@ for unconstrained_input in [false] do
                             message := [1, 1, 0];
                             perm := poseidon_permute(message : mds_is_id := mds_is_id);
                             hash := perm[1..state_size - 1]; // implicitly setting rate to state_size-1, capacity to 1
+                            time_system := Cputime();
                             system := polynomial_system_last_squeeze(hash :
                                                                      unconstrained_input := unconstrained_input,
                                                                      mds_is_id := mds_is_id,
@@ -163,6 +164,7 @@ for unconstrained_input in [false] do
                                                                      invert_weight_mds := invert_weight_mds,
                                                                      make_round_gbs := make_round_gbs,
                                                                      keep_gb := keep_gb);
+                            time_system := Cputime(time_system);
                             printf "\n —————————————\n" ;
                             printf "monomial order:      %o\n", order ;
                             printf "unconstrained_input: %o\n", unconstrained_input ;
@@ -181,7 +183,9 @@ for unconstrained_input in [false] do
                             printf "macaulay bound:       %o\n", macaulay_bound(system);
                             SetVerbose("Groebner", 0);
                             SetVerbose("FGLM", 0);
+                            time_gb := Cputime();
                             system := GroebnerBasis(system);
+                            time_gb := Cputime(time_gb);
                             printf "degree of regularity: %o\n", d_reg(system);
                             if check_gb_consistency then
                                 print("executing consistency check …");
@@ -192,6 +196,8 @@ for unconstrained_input in [false] do
                                     print("[!!!] polynomial system probably incorrect.");
                                 end if;
                             end if;
+                            printf "time to set up system: %os\n", time_system;
+                            printf "time to compute gb:    %os\n", time_gb;
                         end for;
                     end for;
                 end for;

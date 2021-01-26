@@ -170,12 +170,14 @@ for unconstrained_input in [false] do
                     message := [1..rate] cat [0 : i in [rate+1..state_size]];
                     perm := rescue_xlix(message : mds_is_id := mds_is_id);
                     hash := perm[1..rate];
+                    time_system := Cputime();
                     system := polynomial_system_last_squeeze(hash :
                                                              unconstrained_input := unconstrained_input,
                                                              mds_is_id := mds_is_id,
                                                              capacity_var := capacity_var,
                                                              make_round_gbs := make_round_gbs,
                                                              keep_gb := keep_gb);
+                    time_system := Cputime(time_system);
                     printf "\n —————————————\n" ;
                     printf "monomial order:      %o\n", order ;
                     printf "unconstrained_input: %o\n", unconstrained_input ;
@@ -191,7 +193,9 @@ for unconstrained_input in [false] do
                     printf "macaulay bound:       %o\n", macaulay_bound(system);
                     SetVerbose("Groebner", 0);
                     SetVerbose("FGLM", 0);
+                    time_gb := Cputime();
                     system := GroebnerBasis(system);
+                    time_gb := Cputime(time_gb);
                     printf "degree of regularity: %o\n", d_reg(system);
                     printf "\n";
                     if check_gb_consistency then
@@ -203,6 +207,8 @@ for unconstrained_input in [false] do
                             print("[!!!] polynomial system probably incorrect.");
                         end if;
                     end if;
+                    printf "time to set up system: %os\n", time_system;
+                    printf "time to compute gb:    %os\n", time_gb;
                 end for;
             end for;
         end for;
