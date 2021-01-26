@@ -162,11 +162,11 @@ function polynomial_system_last_squeeze (hash_digest :
 end function;
 
 
-for unconstrained_input in [false, true] do
-    for mds_is_id in [false, true] do
-        for capacity_var in [false, true] do
-            for make_round_gbs in [false, true] do
-                for keep_gb in [false, true] do
+for unconstrained_input in [false] do
+    for mds_is_id in [false] do
+        for capacity_var in [false] do
+            for make_round_gbs in [false] do
+                for keep_gb in [false] do
                     message := [1..rate] cat [0 : i in [rate+1..state_size]];
                     perm := rescue_xlix(message : mds_is_id := mds_is_id);
                     hash := perm[1..rate];
@@ -184,6 +184,7 @@ for unconstrained_input in [false, true] do
                     printf "keep_gb:             %o\n", keep_gb ;
                     printf "capacity_var:        %o\n", capacity_var ;
                     printf "\n";
+                    printf "rounds:    %o\n", num_rounds;
                     printf "input:  %o\noutput: %o\n", message, perm ;
                     print(system);
                     printf "is Gröbner:           %o\n", IsGroebner(system) ;
@@ -193,7 +194,6 @@ for unconstrained_input in [false, true] do
                     system := GroebnerBasis(system);
                     printf "degree of regularity: %o\n", d_reg(system);
                     printf "\n";
-                    // d_reg(system);
                     if check_gb_consistency then
                         print("executing consistency check …");
                         V := Variety(Ideal(system));
@@ -208,3 +208,4 @@ for unconstrained_input in [false, true] do
         end for;
     end for;
 end for;
+exit;

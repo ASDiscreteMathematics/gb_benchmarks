@@ -5,8 +5,8 @@ s_box_power := 3;
 security_level :=  0;
 
 order := "grevlex";
-is_low_round_number := true; // artifitially decrease security level for analytic purposes
-num_lower_rounds := 4;
+num_lower_part_rounds := 1;
+num_lower_full_rounds := 2;
 
 SetSeed(42);
 SetNthreads(8);
@@ -27,9 +27,8 @@ function poseidon_initialize (field_size, state_size, s_box_power, security_leve
     mds := generate_mds_matrix(field, state_size);
 
     // TODO see https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/calc_round_numbers.py
-    assert IsEven(num_lower_rounds);
-    num_full_rounds := Integers() ! (num_lower_rounds / 2);
-    num_part_rounds := Integers() ! (num_lower_rounds / 2);
+    num_full_rounds := num_lower_full_rounds;
+    num_part_rounds := num_lower_part_rounds;
     num_rounds := num_full_rounds + num_part_rounds;
     assert IsEven(num_full_rounds);
 
@@ -94,7 +93,7 @@ function polynomial_system_last_squeeze (hash_digest :
                                          invert_weight_mds := false,
                                          make_round_gbs := false,
                                          keep_gb := false)
-    assert #hash_digest lt state_size;
+    assert #hash_digest lt state_size; // capacity needs to be of size at least 1
 
     capacity := 0;
     if capacity_var then
@@ -146,12 +145,12 @@ function polynomial_system_last_squeeze (hash_digest :
 end function;
 
 
-for unconstrained_input in [true] do
+for unconstrained_input in [false] do
     for mds_is_id in [false] do
         for capacity_var in [false] do
             for weight_order in [false] do
                 for invert_weight_mds in [false] do
-                    for make_round_gbs in [true] do
+                    for make_round_gbs in [false] do
                         for keep_gb in [false] do
                             message := [1, 1, 0];
                             perm := poseidon_permute(message : mds_is_id := mds_is_id);
@@ -174,6 +173,8 @@ for unconstrained_input in [true] do
                             printf "weight_order:        %o\n", weight_order ;
                             printf "invert_mds:          %o\n", invert_weight_mds ;
                             printf "\n";
+                            printf "full rounds:    %o\n", num_full_rounds;
+                            printf "partial rounds: %o\n", num_part_rounds;
                             printf "input:  %o\noutput: %o\n", message, perm ;
                             print(system);
                             printf "is Gröbner:           %o\n", IsGroebner(system) ;
@@ -198,3 +199,4 @@ for unconstrained_input in [true] do
         end for;
     end for;
 end for;
+exit;
