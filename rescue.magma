@@ -11,6 +11,7 @@ num_lower_rounds := 3;
 SetSeed(42);
 SetNthreads(8);
 check_gb_consistency := false;
+write_to_disk := true;
 
 import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound;
 
@@ -178,6 +179,12 @@ for unconstrained_input in [false] do
                                                              make_round_gbs := make_round_gbs,
                                                              keep_gb := keep_gb);
                     time_system := Cputime(time_system);
+                    if write_to_disk then
+                        filename := Sprintf("./xlix_comps/%o_%o-round_GF-%o_mds.txt", order, num_rounds, field_size);
+                        Write(filename, mds : Overwrite := true);
+                        filename := Sprintf("./xlix_comps/%o_%o-round_GF-%o_system.txt", order, num_rounds, field_size);
+                        Write(filename, system : Overwrite := true);
+                    end if;
                     printf "\n —————————————\n" ;
                     printf "monomial order:      %o\n", order ;
                     printf "unconstrained_input: %o\n", unconstrained_input ;
@@ -196,6 +203,10 @@ for unconstrained_input in [false] do
                     time_gb := Cputime();
                     system := GroebnerBasis(system);
                     time_gb := Cputime(time_gb);
+                    if write_to_disk then
+                        filename := Sprintf("./xlix_comps/%o_%o-round_GF-%o_gb.txt", order, num_rounds, field_size);
+                        Write(filename, system : Overwrite := true);
+                    end if;
                     printf "degree of regularity: %o\n", d_reg(system);
                     printf "\n";
                     if check_gb_consistency then
