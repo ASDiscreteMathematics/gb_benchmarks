@@ -1,3 +1,5 @@
+## Source: PhD Thesis of Candice Mitchell
+
 # these two definitions are used to check if
 # we have actually found a Groebner basis
 def reduce_by_nosig(f, G):
@@ -630,17 +632,17 @@ def clean_g(G, sig_red, R):
 # homogenize = True
 def f5_dynamic(polys, homogenize = False):
     R, I, F, X, lp, Y = initialize_ideal(polys, homogenize)
-    #keep up with the number of spolys
+    # keep up with the number of spolys
     spoly = 0
-    #keep up with signature redundant and zeros
+    # keep up with signature redundant and zeros
     sig_red = []
     num_red = 0
     zero = 0
-    #T keeps up with leading monomials
+    # T keeps up with leading monomials
     T = [];
-    #G keeps track of the GB
+    # G keeps track of the GB
     G = [];
-    #rule keeps up with rewrite rules
+    # rule keeps up with rewrite rules
     rule = [];
     trace = []
     generated = []
