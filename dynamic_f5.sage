@@ -691,24 +691,4 @@ def f5_dynamic(polys, homogenize = False):
     w = [ lp.get_values(y) for y in Y ]
     G = clean_g(G, sig_red, R2)
     print(f"size of basis: {len(G)}")
-    return G, w, [ g.poly().lm() for g in G ]
-
-if __name__ == "__main__":
-    R.<x, y, z> = GF(1009)[]
-    polys = [x^2+y^2+z^2-1, x*y*z, x*y-1]
-    G, w, lms = f5_dynamic(polys)
-    print(f"–––––––––––––––––")
-    gb = [sig_poly.poly() for sig_poly in G]
-    print(f"{gb}")
-    print(f"{w}")
-    print(f"–––––––––––––––––")
-    R = R.change_ring(order="lex")
-    gb = [R(poly) for poly in gb]
-    print(f"lex       – is GB: {Ideal(gb).basis.is_groebner()}")
-    R = R.change_ring(order="degrevlex")
-    gb = [R(poly) for poly in gb]
-    print(f"degrevlex – is GB: {Ideal(gb).basis.is_groebner()}")
-    order = matrix(3,[1,2,3,0,0,-1,0,-1,0])
-    R = R.change_ring(order=order)
-    gb = [R(poly) for poly in gb]
-    print(f"[1,2,3]   – is GB: {Ideal(gb).basis.is_groebner()}")
+    return G, w
