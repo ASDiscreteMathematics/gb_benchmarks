@@ -413,6 +413,7 @@ def generate_first_pairs(F):
 # adding the most recent element to the basis
 def generate_pairs(G, S, R2, lp, Y, T, X, homogenize):
     g = G[-1]
+    R = g.poly().parent()
     lm_g = g.poly().lm()
     for i in range(len(G) - 1):
         f = G[i]
@@ -425,7 +426,7 @@ def generate_pairs(G, S, R2, lp, Y, T, X, homogenize):
             continue
         # assign the max signature to the pair
         sig = f.multiply(u).sig().max_sig(g.multiply(t).sig())
-        if not syzygy_check(G, f.multiply(u).sig(), g.multiply(t).sig()):
+        if not syzygy_check(G, R, f.multiply(u).sig(), g.multiply(t).sig()):
             if sig == f.multiply(u).sig():
                 S.insert(0, Pair((sig, (u, i), (t, len(G) - 1))))
             else:
@@ -477,7 +478,7 @@ def create_poly(spoly, zero, generated, G, F, R, T, X, pair, lp, Y, rule, S, tra
     return spoly, zero, generated, zero_poly, G, lp, rule
 
 # returns True iff sig1 or sig2 is a syzygy signature
-def syzygy_check(G, sig1, sig2):
+def syzygy_check(G, R, sig1, sig2):
     if check_gs(G, R, sig1) or check_gs(G, R, sig2): return True
     return False
 
@@ -509,10 +510,12 @@ def rewritten(rule, p, R):
 # and True iff there exists (tau, g) in the basis such
 # that tau divides sig(f) and lm(g) divides lm(f)
 def sig_redundant(sig_red, G, f):
+    print(f"    [·] sig_redundant({len(sig_red)}, {len(G)}, {f.sig()})")
     if len(G) == 1:
         return sig_red, False
     if f.poly() == 0:
         return sig_red, False
+    R = f.poly().parent()
     if any(g.poly() != 0 and R.monomial_divides(g.sig().term(), f.sig().term()) and R.monomial_divides(g.poly().lm(), f.poly().lm()) for g in G):
         sig_red.append(f.poly())
         return sig_red, True
