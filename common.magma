@@ -64,6 +64,7 @@ function d_reg (poly_system)
     if is_regular_sequence (poly_system) then
         return macaulay_bound (poly_system);
     end if;
-    // TODO run F4, return max step degree
-    return -1;
+    gb, degs := GroebnerBasis(Ideal(poly_system));
+    d, pos := Max(degs);
+    return d;
 end function;
