@@ -45,10 +45,10 @@ class Ciminion():
         pc = self.pc
         pe = self.pe
         rol = self.rol
-        next_round_key = lambda : self.__next_round_key(use_supplied_round_keys=use_supplied_round_keys)
+        next_round_key = lambda : self._next_round_key(use_supplied_round_keys=use_supplied_round_keys)
         nonce = field(nonce)
         plaintext = [field(pt) for pt in plaintext]
-        self.__reset_key_schedule()
+        self._reset_key_schedule()
         k_0 = next_round_key()
         k_1 = next_round_key()
         initial_state = vector([nonce, k_0, k_1])
@@ -61,7 +61,7 @@ class Ciminion():
             middle_state = rol(middle_state)
             out_state = pe(middle_state)
             ciphertext += [out_state[0] + plaintext[i], out_state[1] + plaintext[i + 1]]
-        self.__reset_key_schedule()
+        self._reset_key_schedule()
         return ciphertext
 
     def f(self, i, state):
@@ -113,7 +113,7 @@ class Ciminion():
         a, b, c = [field(s) for s in state]
         return vector([a*b + c, a, b])
 
-    def __next_round_key(self, use_supplied_round_keys=True):
+    def _next_round_key(self, use_supplied_round_keys=True):
         '''
         Returns the next round key in the key schedule.
         '''
@@ -125,7 +125,7 @@ class Ciminion():
         self.__round_key_idx += 1
         return round_key
 
-    def __reset_key_schedule(self):
+    def _reset_key_schedule(self):
         '''
         Resets the key derivation function.
         '''
