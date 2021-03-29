@@ -132,3 +132,23 @@ class Ciminion():
         self.__key_state = (self.IV, self.__master_key[0], self.__master_key[1])
         self.__round_key_idx = 0
 
+class TestCiminion():
+    def __init__(self):
+        self._sym_actual_correspondance(4, 1)
+        self._sym_actual_correspondance(6, 5)
+        if get_verbose() >= 1: print(f"Testing of Ciminion completed")
+
+    def _sym_actual_correspondance(self, pt_len, nonce):
+        constants = [43, 60, 20, 22, 19, 94, 19, 4, 98, 62, 28, 24, 76, 7, 61, 100, 69, 28, 75, 72] # chosen by fair dice roll. guaranteed to be random.
+        R = PolynomialRing(GF(101), 'x', pt_len)
+        cim = Ciminion(R, constants, (10, 10), 3, 2, round_keys=R.gens())
+        sy = cim(nonce, list(range(pt_len)), use_supplied_round_keys=True)
+        ct = cim(nonce, list(range(pt_len)), use_supplied_round_keys=False)
+        assert [cim._next_round_key(use_supplied_round_keys=True) for _ in range(pt_len)] == list(R.gens()), f"The key schedule does not correctly produce the symbolic keys."
+        cim._reset_key_schedule()
+        round_keys = [cim._next_round_key(use_supplied_round_keys=False) for _ in range(pt_len)]
+        assert [s(round_keys) for s in sy] == list(ct), f"Symbolic and actual evaluation of Ciminion do not correspond."
+        return True
+
+if __name__ == "__main__":
+    TestCiminion()
