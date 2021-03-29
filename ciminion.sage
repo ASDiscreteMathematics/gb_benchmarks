@@ -6,7 +6,7 @@ class Ciminion():
     A (probably naïve) implementation of arithmetization optimized cipher Ciminion.
     For more information and details, see https://eprint.iacr.org/2021/267
     '''
-    def __init__(self, field, constants, master_key, N, R, IV=1):
+    def __init__(self, field, constants, master_key, N, R, IV=1, round_keys=None):
         if field.is_field():
             assert field.is_prime_field(), f"This implementation of Ciminion is only defined over prime fields, not over {field}."
         else:
@@ -18,6 +18,8 @@ class Ciminion():
         assert R > 0, f"pE needs to apply round function f at least 1 time, not {R} times."
         assert all([constants[4*i + 3] > 1 for i in range(N + R)]), f"The constant 'RC4i' needs to be ≠ 0 and ≠ 1 for all i."
         assert field(IV) >= 0, f"Given initialization vector {IV} cannot be interpreted as a field element."
+        if round_keys:
+            round_keys = [field(k) for k in round_keys]
         constants = [field(c) for c in constants]
         master_key = [field(mk) for mk in master_key]
         IV = field(IV)
@@ -27,11 +29,15 @@ class Ciminion():
         self.N = N
         self.R = R
         self.IV = IV
+        self.__round_keys = round_keys
+        self.__round_key_idx = 0
         self.__key_state = (IV, master_key[0], master_key[1])
 
-    def __call__(self, nonce, plaintext):
+    def __call__(self, nonce, plaintext, use_supplied_round_keys=True):
         '''
         Encrypt the given plaintext using supplied nonce.
+        If round keys were supplied during initialization, use those, defaulting to the real key schedule
+        (picked up at the correct position) after the list of supplied round keys is exhausted.
         '''
         assert is_even(len(plaintext)), f"Ciminion is only defined for an even number of plaintext chunks, not {len(plaintext)}."
         assert len(plaintext) > 0, f"Please call this function only if you want to actually encrypt something :)"
@@ -39,7 +45,7 @@ class Ciminion():
         pc = self.pc
         pe = self.pe
         rol = self.rol
-        next_round_key = self.__next_round_key
+        next_round_key = lambda : self.__next_round_key(use_supplied_round_keys=use_supplied_round_keys)
         nonce = field(nonce)
         plaintext = [field(pt) for pt in plaintext]
         self.__reset_key_schedule()
@@ -107,15 +113,22 @@ class Ciminion():
         a, b, c = [field(s) for s in state]
         return vector([a*b + c, a, b])
 
-    def __next_round_key(self):
+    def __next_round_key(self, use_supplied_round_keys=True):
         '''
         Returns the next round key in the key schedule.
         '''
+        # always advance key state because len(plaintext) is only known at runtime
         self.__key_state = self.pc(self.__key_state)
-        return self.__key_state[0]
+        round_key = self.__key_state[0]
+        if use_supplied_round_keys and self.__round_keys and self.__round_key_idx < len(self.__round_keys):
+            round_key = self.__round_keys[self.__round_key_idx]
+        self.__round_key_idx += 1
+        return round_key
 
     def __reset_key_schedule(self):
         '''
         Resets the key derivation function.
         '''
         self.__key_state = (self.IV, self.__master_key[0], self.__master_key[1])
+        self.__round_key_idx = 0
+
