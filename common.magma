@@ -35,7 +35,8 @@ function is_regular_sequence (poly_system)
     R := Parent(poly_system[1]);
     for i in [2..#poly_system - 1] do
         I := Ideal([poly_system[j] : j in [1..i]]);
-        if poly_system[i+1] in I then
+        f := (R / I) ! poly_system[i+1];
+        if IsZero(f) or IsZeroDivisor(f) then
             return false;
         end if;
     end for;
