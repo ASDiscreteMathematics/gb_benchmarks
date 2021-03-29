@@ -5,12 +5,13 @@ s_box_power := 3;
 security_level :=  0;
 
 order := "grevlex";
-num_lower_part_rounds := 1;
+num_lower_part_rounds := 4;
 num_lower_full_rounds := 2;
 
 SetSeed(42);
 SetNthreads(8);
 check_gb_consistency := false;
+write_to_disk := true;
 
 import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound;
 
@@ -165,6 +166,12 @@ for unconstrained_input in [false] do
                                                                      make_round_gbs := make_round_gbs,
                                                                      keep_gb := keep_gb);
                             time_system := Cputime(time_system);
+                            if write_to_disk then
+                                filename := Sprintf("./poseidon_comps/%o_(%of,%op)-round_GF-%o_mds.txt", order, num_full_rounds, num_part_rounds, field_size);
+                                Write(filename, mds : Overwrite := true);
+                                filename := Sprintf("./poseidon_comps/%o_(%of,%op)-round_GF-%o_system.txt", order, num_full_rounds, num_part_rounds, field_size);
+                                Write(filename, system : Overwrite := true);
+                            end if;
                             printf "\n —————————————\n" ;
                             printf "monomial order:      %o\n", order ;
                             printf "unconstrained_input: %o\n", unconstrained_input ;
@@ -186,6 +193,10 @@ for unconstrained_input in [false] do
                             time_gb := Cputime();
                             system := GroebnerBasis(system);
                             time_gb := Cputime(time_gb);
+                            if write_to_disk then
+                                filename := Sprintf("./poseidon_comps/%o_(%of,%op)-round_GF-%o_gb.txt", order, num_full_rounds, num_part_rounds, field_size);
+                                Write(filename, system : Overwrite := true);
+                            end if;
                             printf "degree of regularity: %o\n", d_reg(system);
                             if check_gb_consistency then
                                 print("executing consistency check …");
