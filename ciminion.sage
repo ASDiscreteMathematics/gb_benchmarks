@@ -90,8 +90,8 @@ class Ciminion():
         assert len(state) == 3, f"The state must be of size 3, not {len(state)}."
         field = self.field
         new_state = vector([field(s) for s in state])
-        for i in range(starting_round, num_rounds):
-            new_state = self.f(i, new_state)
+        for i in range(num_rounds):
+            new_state = self.f(starting_round + i, new_state)
         return new_state
 
     def pc(self, state):
