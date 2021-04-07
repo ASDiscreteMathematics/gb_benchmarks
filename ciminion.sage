@@ -6,13 +6,17 @@ class Ciminion():
     A (probably naïve) implementation of arithmetization optimized cipher Ciminion.
     For more information and details, see https://eprint.iacr.org/2021/267
     '''
-    def __init__(self, field, constants, master_key, N, R, IV=1, round_keys=None):
+    def __init__(self, field, constants, master_key, N=None, R=None, IV=1, round_keys=None):
         if field.is_field():
             assert field.is_prime_field(), f"This implementation of Ciminion is only defined over prime fields, not over {field}."
         else:
             assert field.is_ring(), f"The parameter 'field' must be either a field or – for symbolic evaluations – a polynomial ring, not {type(field)}."
             assert field.base_ring().is_prime_field(), f"This implementation of Ciminion is only defined over prime fields, not over {field.base_ring()}."
-        assert len(constants) == 4*(N + R), f"Wrong number of constants ({len(constants)}) for desired number of rounds ({N+R})."
+        # security parameters according to Table 1, ignoring the requirement s ≥ 64
+        s = field.characteristic()
+        if not N: N = s + 6
+        if not R: R = max(ceil((s + 37) / 12), 6)
+        assert len(constants) == 4*(N + R), f"Wrong number of constants ({len(constants)}) for desired number of rounds (N = {N}, R = {R})."
         assert len(master_key) == 2, f"Master key must consist of 2 elements, but {len(master_key)} were given."
         assert N > 0, f"pC needs to apply round function f at least 1 time, not {N} times."
         assert R > 0, f"pE needs to apply round function f at least 1 time, not {R} times."
