@@ -154,5 +154,47 @@ class TestCiminion():
         assert [s(round_keys) for s in sy] == list(ct), f"Symbolic and actual evaluation of Ciminion do not correspond."
         return True
 
+def __p_poly_system__(ciminion, starting_round, num_rounds, xs, vars_every_x_rounds=1):
+    assert vars_every_x_rounds >= 1, f"Cannot inject variables every non-positive ({vars_every_x_rounds}) number of rounds."
+    assert ceil((num_rounds / vars_every_x_rounds) + 1)*3 <= len(xs), f"Not enough variables ({len(xs)}) for {num_rounds} rounds " + \
+                  f"(injecting every {vars_every_x_rounds} rounds). Need at least {ceil((num_rounds / vars_every_x_rounds) + 1)*3}."
+    system = []
+    xs_pos = 0
+    curr_state = xs[:3]
+    for r in range(num_rounds):
+        curr_state = ciminion.__p__(curr_state, starting_round + r, 1)
+        if (r + 1) % vars_every_x_rounds == 0:
+            xs_pos += 1
+            next_state = xs[xs_pos*3:(xs_pos + 1)*3]
+            system += [n - c for n, c in zip(next_state, curr_state)]
+            curr_state = next_state
+    if (r + 1) % vars_every_x_rounds != 0: # add remaining equations if necessary
+        xs_pos += 1
+        final_state = xs[xs_pos*3:(xs_pos + 1)*3]
+        system += [f - c for f, c in zip(final_state, curr_state)]
+    return system
+
+def pc_poly_system(ciminion, xs, vars_every_x_rounds=1):
+    return __p_poly_system__(ciminion, 0, ciminion.N, xs, vars_every_x_rounds=vars_every_x_rounds)
+
+def pe_poly_system(ciminion, xs, vars_every_x_rounds=1):
+    return __p_poly_system__(ciminion, ciminion.N, ciminion.R, xs, vars_every_x_rounds=vars_every_x_rounds)
+
+def test_p_poly_system():
+    constants = [35, 77, 100, 61, 18, 22, 27, 35, 71, 43, 76, 83, 45, 66, 2, 49, 33, 65, 89, 11, 84, 6, 0, 58, 5, 14, 86, 15, 91, 90, 99, 10, 52, 78, 49, 8]
+    for num_rounds, vars_every_x_rounds in [(1, 1), (2, 1), (3, 1), (6, 1), (6, 2), (6, 3), (5, 3), (5, 4), (5, 5), (7, 5), (7, 3)]:
+        R = PolynomialRing(GF(101), 'z', ceil((num_rounds / vars_every_x_rounds) + 1)*3)
+        cim = Ciminion(R, constants, (10, 10), N=6, R=3)
+        system = __p_poly_system__(cim, 0, num_rounds, R.gens(), vars_every_x_rounds=vars_every_x_rounds)
+        round_vals = [(5, 7, 11)]
+        for i in range(num_rounds):
+            next_vals = cim.__p__(round_vals[-1], i, 1)
+            round_vals += [list(next_vals)] # allows flattening later
+        round_vals = flatten(round_vals[:-1:vars_every_x_rounds] + round_vals[-1])
+        assert not any([f(round_vals) for f in system]), f"Polynomial system and its concrete evaluation don't correspond."
+    return True
+
+
 if __name__ == "__main__":
     TestCiminion()
+    test_p_poly_system()
