@@ -16,7 +16,7 @@ class Ciminion():
         s = field.characteristic()
         if not N: N = s + 6
         if not R: R = max(ceil((s + 37) / 12), 6)
-        assert len(constants) == 4*(N + R), f"Wrong number of constants ({len(constants)}) for desired number of rounds (N = {N}, R = {R})."
+        assert len(constants) == 4*(N + R), f"Wrong number of constants ({len(constants)}) for desired number of rounds (N = {N}, R = {R}). Need {4*(N + R)}."
         assert len(master_key) == 2, f"Master key must consist of 2 elements, but {len(master_key)} were given."
         assert N > 0, f"pC needs to apply round function f at least 1 time, not {N} times."
         assert R > 0, f"pE needs to apply round function f at least 1 time, not {R} times."
@@ -144,10 +144,11 @@ class TestCiminion():
 
     def _sym_actual_correspondance(self, pt_len, nonce):
         constants = [43, 60, 20, 22, 19, 94, 19, 4, 98, 62, 28, 24, 76, 7, 61, 100, 69, 28, 75, 72] # chosen by fair dice roll. guaranteed to be random.
+        plaintext = list(range(pt_len))
         R = PolynomialRing(GF(101), 'x', pt_len)
         cim = Ciminion(R, constants, (10, 10), 3, 2, round_keys=R.gens())
-        sy = cim(nonce, list(range(pt_len)), use_supplied_round_keys=True)
-        ct = cim(nonce, list(range(pt_len)), use_supplied_round_keys=False)
+        sy = cim(nonce, plaintext, use_supplied_round_keys=True)
+        ct = cim(nonce, plaintext, use_supplied_round_keys=False)
         assert [cim._next_round_key(use_supplied_round_keys=True) for _ in range(pt_len)] == list(R.gens()), f"The key schedule does not correctly produce the symbolic keys."
         cim._reset_key_schedule()
         round_keys = [cim._next_round_key(use_supplied_round_keys=False) for _ in range(pt_len)]
