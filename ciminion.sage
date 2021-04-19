@@ -1,6 +1,8 @@
 #!/usr/bin/env sage
 # coding: utf-8
 
+from time import process_time
+
 class Ciminion():
     '''
     A (probably naïve) implementation of arithmetization optimized cipher Ciminion.
@@ -194,6 +196,38 @@ def test_p_poly_system():
         round_vals = flatten(round_vals[:-1:vars_every_x_rounds] + round_vals[-1])
         assert not any([f(round_vals) for f in system]), f"Polynomial system and its concrete evaluation don't correspond."
     return True
+
+def time_variable_degree_tradeoff(field_size=None, nonce=1, master_key=(42, 42), num_rounds=12, vars_every_x_rounds=3, constants=None):
+    # set up parameters and constants and such
+    import fgb_sage
+    if not field_size:
+        field_size = fgb_sage.MAX_PRIME
+    if not constants:
+        constants = [randint(0, field_size) for _ in range(4*(num_rounds))]
+
+    ring = PolynomialRing(GF(field_size), 'x', ceil(num_rounds / vars_every_x_rounds) * 3)
+    cim = Ciminion(ring, constants, master_key, N=num_rounds-1, R=1) # round distribution doesn't matter
+    constraints = [nonce] + list(ring.gens()[:-1]) + [0, 0] + [ring.gens()[-1]]
+
+    sys_start = process_time()
+    system = __p_poly_system__(cim, 0, num_rounds, constraints, vars_every_x_rounds=vars_every_x_rounds)
+    sys_stop = process_time()
+    gb_magma_start = process_time()
+    gb = magma.GroebnerBasis(system).sage()
+    gb_magma_stop = process_time()
+    gb_fgb_start = process_time()
+    gb = fgb_sage.groebner_basis(system, verbosity=0)
+    gb_fgb_stop = process_time()
+    I = Ideal(gb)
+    var_start = process_time()
+    var = magma.Variety(I).sage()
+    var_stop = process_time()
+
+    print(f"Variety:\n{var}")
+    print(f"time sys:   {n(sys_stop - sys_start, digits=3)}")
+    print(f"time magma: {n(gb_stop - gb_start, digits=3)}")
+    print(f"time fgb:   {n(gb_stop - gb_start, digits=3)}")
+    print(f"time var:   {n(var_stop - var_start, digits=3)}")
 
 
 if __name__ == "__main__":
