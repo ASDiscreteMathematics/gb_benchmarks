@@ -13,7 +13,7 @@ SetNthreads(8);
 check_gb_consistency := false;
 write_to_disk := true;
 
-import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound;
+import "common.magma" : vec_pow, mat_pow, sum_all, random_non_subfield_value, generate_mds_matrix, d_reg, macaulay_bound, is_regular_sequence;
 
 function rescue_initialize (field_size, state_size, capacity, security_level)
     assert IsPrime(field_size);
@@ -201,17 +201,17 @@ for unconstrained_input in [false] do
                     SetVerbose("Groebner", 0);
                     SetVerbose("FGLM", 0);
                     time_gb := Cputime();
-                    system := GroebnerBasis(system);
+                    gb, degs := GroebnerBasis(system);
                     time_gb := Cputime(time_gb);
                     if write_to_disk then
                         filename := Sprintf("./xlix_comps/%o_%o-round_GF-%o_gb.txt", order, num_rounds, field_size);
-                        Write(filename, system : Overwrite := true);
+                        Write(filename, gb : Overwrite := true);
                     end if;
-                    printf "degree of regularity: %o\n", d_reg(system);
+                    printf "degree of regularity: %o\n", Max(degs);
                     printf "\n";
                     if check_gb_consistency then
                         print("executing consistency check …");
-                        V := Variety(Ideal(system));
+                        V := Variety(Ideal(gb));
                         V_partial := [[v[i] : i in [1..state_size]] : v in V];
                         assert #V_partial eq #V;
                         if not message in V_partial then
@@ -220,6 +220,7 @@ for unconstrained_input in [false] do
                     end if;
                     printf "time to set up system: %os\n", time_system;
                     printf "time to compute gb:    %os\n", time_gb;
+                    printf "is Regular Sequence:   %o\n", is_regular_sequence(system) ;
                 end for;
             end for;
         end for;
