@@ -2,7 +2,7 @@ load('CompactFIPS202.sage')
 
 class RescuePrime:
 
-    def __init__(self, p, m, capacity, security_level):
+    def __init__(self, p, m, capacity, security_level, N=None):
         assert is_prime(p), f"Rescue Prime is only defined over prime fields."
         self.p = p
         self.Fp = GF(p)
@@ -15,7 +15,9 @@ class RescuePrime:
         self.alpha = alpha
         self.alphainv = alphainv
 
-        self.N = self._get_number_of_rounds()
+        self.N = N
+        if not N:
+            self.N = self._get_number_of_rounds()
         self.MDS = self._get_mds_matrix()
         self.round_constants = self._get_round_constants()
 
