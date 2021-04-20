@@ -1,7 +1,6 @@
 load('CompactFIPS202.sage')
 
 class RescuePrime:
-
     def __init__(self, p, m, capacity, security_level, N=None):
         assert is_prime(p), f"Rescue Prime is only defined over prime fields."
         self.p = p
@@ -76,9 +75,13 @@ class RescuePrime:
             round_constants += [Fp(integer)]
         return round_constants
 
-    def rescue_XLIX_permutation(self, state):
-        Fp, m, alpha, alphainv, N, MDS, round_constants = self.Fp, self.m, self.alpha, self.alphainv, self.N, self.MDS, self.round_constants
-        for i in range(N):
+    def rescue_XLIX_permutation(self, state, starting_round=0, num_rounds=0):
+        Fp, m, alpha, alphainv, N = self.Fp, self.m, self.alpha, self.alphainv, self.N
+        MDS, round_constants = self.MDS, self.round_constants
+        state = copy(state) # don't accidentally change inplace
+        if num_rounds:
+            N = starting_round + num_rounds
+        for i in range(starting_round, N):
             # S-box
             for j in range(m):
                 state[j,0] = state[j,0]^alpha
@@ -159,5 +162,47 @@ class TestRescuePrime:
         digest_expected = [3926287221, 2034419010, 1395627778, 657779429]
         assert digest == digest_expected, f"Regression test of Rescue Prime has failed: found {digest}, not {digest_expected}"
 
-if __name__ == "__main__":
-    TestRescuePrime()
+        assert test_rescue_prime_poly_system()
+
+def rescue_prime_last_squeeze_poly_system(rp, xs, hash_digest):
+    m, rate, cap, alpha, N, MDS, round_constants = rp.m, rp.rate, rp.capacity, rp.alpha, rp.N, rp.MDS, rp.round_constants
+    assert len(xs) >= m*N, f"Too few variables ({len(xs)}) for {N} rounds (state size {m}). Need at least {m*N}."
+    assert len(hash_digest) == rate, f"The hash digest needs to be of length {rate} (is {len(hash_digest)})."
+    MDS_inv = MDS.inverse()
+    system = []
+    for r in range(N):
+        # forward half-round
+        if r == 0: # first round
+            curr_state = matrix(list(xs[:rate]) + [0]*cap).transpose()
+        else:
+            curr_state = matrix(xs[(r+0)*m-cap:(r+1)*m-cap]).transpose()
+        curr_state = matrix([el[0]^alpha for el in curr_state.rows()]).transpose()
+        curr_state = MDS * curr_state
+        curr_state = curr_state + matrix(round_constants[(2*r+0)*m:(2*r+1)*m]).transpose()
+        # backward half-round
+        if r < N - 1:
+            next_state = matrix(xs[(r+1)*m-cap:(r+2)*m-cap]).transpose()
+        else: # last round
+            next_state = matrix(hash_digest + list(xs[(r+1)*m-cap:(r+1)*m])).transpose()
+        next_state = next_state - matrix(round_constants[(2*r+1)*m:(2*r+2)*m]).transpose()
+        next_state = MDS_inv * next_state
+        next_state = matrix([el[0]^alpha for el in next_state.rows()]).transpose()
+        system += [n[0] - c[0] for n, c in zip(next_state.rows(), curr_state.rows())]
+    return system
+
+def test_rescue_prime_last_squeeze_poly_system():
+    for p, m, cap, N in [(101, 7, 4, 2), (1021, 8, 6, 4), (9973, 9, 2, 5)]:
+        input_sequence = list(range(m-cap))
+        rp = RescuePrime(p, m, cap, 128, N=N)
+        ring = PolynomialRing(GF(p), 'z', m*N)
+        hash_digest = rp.rescue_prime_hash(input_sequence)
+        system = rescue_prime_poly_system(rp, ring.gens(), hash_digest)
+        inter_vals = [matrix([input_sequence + [0]*cap]).transpose()]
+        for r in range(N):
+            inter_vals += [rp.rescue_XLIX_permutation(inter_vals[-1], starting_round=r, num_rounds=1)]
+        inter_vals = flatten([flatten(c) for iv in inter_vals for c in iv.columns()])
+        assert inter_vals[-m:-cap] == hash_digest, f"expected hash {hash_digest}, but found {inter_vals[-m:-cap]}."
+        inter_vals = inter_vals[:m-cap] + inter_vals[m:] # cut out initial capacity
+        inter_vals = inter_vals[:-m] + inter_vals[-cap:] # cut out the hash digest
+        assert not any(p(inter_vals) for p in system), f"Polynomial system and its concrete evaluation don't correspond."
+    return True
