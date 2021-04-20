@@ -2,8 +2,7 @@ import resource
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
 
-## Partly adapted from https://medium.com/survata-engineering-blog/49f027e3d1bau
-
+load('gmimc.sage')
 load('rescue_prime.sage')
 
 class MemoryMonitor:
@@ -19,41 +18,56 @@ class MemoryMonitor:
 
 class ExperimentStarter:
     def __init__(self):
-        list_of_experiments = [
-            ("rescue", 101),
-        ]
-        for experiment in list_of_experiments:
-            self.start_experiment(experiment)
+        self.rate = 3
+        self.capacity = 4
+        self.input_sequence = [1, 2, 3]
 
-    def analyze_experiment(self, experiment):
-        exp_name, prime = experiment
-        if exp_name == "poseidon":
-            pass
-        elif exp_name == "rescue":
-            pass
-        elif exp_name == "gmimc":
-            pass
-        elif exp_name == "plookup":
+    def __call__(self, primitive_name, prime):
+        self.start_experiment(primitive_name, prime)
+
+    def analyze_primitive(self, primitive_name, prime):
+        if primitive_name == "poseidon":
+            system = self.poseidon_system(prime)
+        elif primitive_name == "rescue":
+            system = self.rescue_system(prime)
+        elif primitive_name == "gmimc":
+            system = self.gmimc_system(prime)
+        elif primitive_name == "plookup":
             pass
         else:
-            raise ValueError(f"No experiment with name {exp_name} defined.")
+            raise ValueError(f"No primitive with name {primitive_name} defined.")
+        gb = Ideal(system).groebner_basis()
+        return gb
 
-    def start_experiment(self, experiment):
+    def poseidon_system(prime):
+        raise NotImplementedError(f"Getting the polynomial system for Poseidon is wip.")
+
+    def rescue_system(self, prime):
+        m, cap, N = 7, 4, 1
+        rp = RescuePrime(prime, m, cap, 128, N=N)
+        ring = PolynomialRing(GF(prime), 'x', m*N)
+        hash_digest = rp.rescue_prime_hash(self.input_sequence)
+        system = rescue_prime_last_squeeze_poly_system(rp, ring.gens(), hash_digest)
+        return system
+
+    def gmimc_system(self, prime):
+        constants = [11, 80, 55, 33]
+        ring = PolynomialRing(GF(101), 'x', len(constants))
+        gmimc = Gmimc(ring, 3, 42, constants, 3, round_keys=ring.gens())
+        system = gmimc(self.input_sequence, use_supplied_round_keys=True)
+        return system
+
+    def start_experiment(self, primitive_name, prime):
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
             mem_thread = executor.submit(monitor.measure_usage)
-            try:
-                exp_thread = executor.submit(self.analyze_experiment, experiment)
-                result = exp_thread.result()
-            finally:
-                monitor.keep_measuring = False
-                max_usage = mem_thread.result()
-
+            result = self.analyze_primitive(primitive_name, prime)
+            monitor.keep_measuring = False
+            max_usage = mem_thread.result()
+            print(f"Resulting Gröbner basis:\n{result}")
             print(f"Peak memory usage: {max_usage} KB")
-
-    def __call__(self):
-        for experiment in self.list_of_experiments:
-            self.start_experiment(experiment)
 
 if __name__ == "__main__":
     es = ExperimentStarter()
+    es("rescue", 101)
+    es("gmimc", 101)
