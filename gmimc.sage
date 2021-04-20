@@ -1,7 +1,7 @@
 #!/usr/bin/env sage
 # coding: utf-8
 
-class Gmimc():
+class Gmimc:
     '''
     A (probably naïve) implementation of arithmetization optimized cipher prime field GMiMC_ERF.
     For more information and details, see https://pure.royalholloway.ac.uk/portal/files/34233554/gmimc_esorics.pdf
@@ -64,11 +64,12 @@ class Gmimc():
             round_key = self.__round_keys[i]
         return round_key
 
-class TestGmimc():
+class TestGmimc:
     def __init__(self):
         self._sym_actual_correspondance(5, [68, 10])
         self._sym_actual_correspondance(5, [12, 28, 74])
         self._sym_actual_correspondance(4, [11, 80, 55, 33])
+        if get_verbose() >= 1: print(f"Testing of GMiMC completed")
 
     def _sym_actual_correspondance(self, n, constants):
         rounds = len(constants)
@@ -80,6 +81,3 @@ class TestGmimc():
         sub_keys = [gmimc._round_key(i, use_supplied_round_keys=False) for i in range(rounds)]
         assert [s(sub_keys) for s in sy] == list(ct), f"Symbolic and actual evaluation of Gmimc do not correspond."
         return True
-
-if __name__ == "__main__":
-    TestGmimc()

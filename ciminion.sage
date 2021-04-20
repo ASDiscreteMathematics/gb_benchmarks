@@ -3,7 +3,7 @@
 
 from time import process_time
 
-class Ciminion():
+class Ciminion:
     '''
     A (probably naïve) implementation of arithmetization optimized cipher Ciminion.
     For more information and details, see https://eprint.iacr.org/2021/267
@@ -138,10 +138,11 @@ class Ciminion():
         self.__key_state = (self.IV, self.__master_key[0], self.__master_key[1])
         self.__round_key_idx = 0
 
-class TestCiminion():
+class TestCiminion:
     def __init__(self):
         self._sym_actual_correspondance(4, 1)
         self._sym_actual_correspondance(6, 5)
+        test_p_poly_system()
         if get_verbose() >= 1: print(f"Testing of Ciminion completed")
 
     def _sym_actual_correspondance(self, pt_len, nonce):
@@ -228,8 +229,3 @@ def time_variable_degree_tradeoff(field_size=None, nonce=1, master_key=(42, 42),
     print(f"time magma: {n(gb_stop - gb_start, digits=3)}")
     print(f"time fgb:   {n(gb_stop - gb_start, digits=3)}")
     print(f"time var:   {n(var_stop - var_start, digits=3)}")
-
-
-if __name__ == "__main__":
-    TestCiminion()
-    test_p_poly_system()
