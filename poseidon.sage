@@ -1,21 +1,9 @@
 ## Source: https://extgit.iaik.tugraz.at/krypto/hadeshash/-/raw/master/code/poseidonperm_x3_64_24_optimized.sage
 
-import time
-
 class Poseidon:
-    def __init__(self):
-        # self.M = 128
-        N = 1536
-        t = 24
-        n = int(N / t)
-        R_F = 8 # 8
-        R_P = 42 # 42
-        prime = 2^64 - 2^8 - 1 # 0xfffffffffffffeff
+    def __init__(self, prime=2^64-2^8-1, R_F=8, R_P=42, t=24):
         F = GF(prime)
-        self.N, self.t, self.n, self.R_F, self.R_P, self.prime, self.F = N, t, n, R_F, R_P, prime, F
-
-        self.timer_start = 0
-        self.timer_end = 0
+        self.t, self.n, self.R_F, self.R_P, self.prime, self.F = t, n, R_F, R_P, prime, F
 
         round_constants = ['0x240ec2a793108b4a', '0x753452ad8cbbbecb', '0xa3612a53da19a265', '0x18a083f17b5a94eb', '0x30d1c3ecb4f44b99', '0xaea865a3e5830f71',
                            '0x4a9134c89190acc6', '0xed37c99a612065b1', '0xafd9964e15975e77', '0xa77147766c1ff75e', '0x1f075012654c408f', '0xc5e11b29262d9283',
@@ -316,14 +304,15 @@ class Poseidon:
                        '0x75d6aade510d3184', '0x78f002115511f2e9', '0x61554fca09413122', '0xc6758a78edfc076a', '0x993dc19cb110e565', '0x6b5259f029a70694']]
 
         assert all([len(MDS_matrix[i]) == len(MDS_matrix) for i in range(len(MDS_matrix))]), f"MDS matrix is not square."
-        self.round_constants = round_constants
-        self.MDS_matrix = MDS_matrix
         self.MDS_matrix_field = matrix(F, [[F(int(MDS_matrix[i][j], 16)) for j in range(t)] for i in range(t)])
         assert self.MDS_matrix_field.is_square(), f"MDS matrix (field) is not square."
         self.round_constants_field = [F(int(r, 16)) for r in round_constants[:(R_F + R_P) * t]]
 
         self.round_constants_field_new = self._calc_equivalent_constants()
         self.M_i, self.v_collection, self.w_hat_collection, self.M_0_0 = self._calc_equivalent_matrices()
+
+    def __call__(self, input_words):
+        return self.perm(input_words)
 
     def _calc_equivalent_constants(self):
         t, R_F, R_P, F = self.t, self.R_F, self.R_P, self.F
@@ -354,8 +343,6 @@ class Poseidon:
         w_hat_collection = []
         v_collection = []
         v = MDS_matrix_field_transpose[[0], list(range(1,t))]
-        # print "M:", MDS_matrix_field_transpose
-        # print "v:", v
         M_mul = MDS_matrix_field_transpose
         M_i = matrix(F, t, t)
         for i in range(R_P - 1, -1, -1):
@@ -369,15 +356,6 @@ class Poseidon:
             # Generate new M_i, and multiplication M * M_i for "previous" round
             M_i = matrix.identity(t)
             M_i[list(range(1,t)), list(range(1,t))] = M_hat
-            #M_mul = MDS_matrix_field_transpose * M_i
-
-            test_mat = matrix(F, t, t)
-            test_mat[[0], list(range(0, t))] = MDS_matrix_field_transpose[[0], list(range(0, t))]
-            test_mat[[0], list(range(1, t))] = v
-            test_mat[list(range(1, t)), [0]] = w_hat
-            test_mat[list(range(1,t)), list(range(1,t))] = matrix.identity(t-1)
-
-            # print M_mul == M_i * test_mat
             M_mul = MDS_matrix_field_transpose * M_i
         return M_i, v_collection, w_hat_collection, MDS_matrix_field_transpose[0, 0]
 
@@ -395,8 +373,6 @@ class Poseidon:
         round_constants_field_new, MDS_matrix_field = self.round_constants_field_new, self.MDS_matrix_field
         M_i, v_collection, w_hat_collection, M_0_0 = self.M_i, self.v_collection, self.w_hat_collection, self.M_0_0
         t, R_F, R_P = self.t, self.R_F, self.R_P
-
-        self.timer_start = time.time()
 
         R_f = int(R_F / 2)
 
@@ -442,8 +418,6 @@ class Poseidon:
             state_words = list(MDS_matrix_field * vector(state_words))
             round_constants_round_counter += 1
 
-        self.timer_end = time.time()
-
         return state_words
 
     def perm_original(self, input_words):
@@ -451,8 +425,6 @@ class Poseidon:
         t, R_F, R_P, MDS_matrix_field = self.t, self.R_F, self.R_P, self.MDS_matrix_field
 
         round_constants_field_new = [round_constants_field[index:index+t] for index in range(0, len(round_constants_field), t)]
-
-        self.timer_start = time.time()
 
         R_f = int(R_F / 2)
 
@@ -489,22 +461,7 @@ class Poseidon:
             state_words = list(MDS_matrix_field * vector(state_words))
             round_constants_round_counter += 1
 
-        self.timer_end = time.time()
-
         return state_words
-
-    def words_to_hex(self, words):
-        n = self.n
-        hex_length = int(ceil(float(n) / 4)) + 2 # +2 for "0x"
-        return ["{0:#0{1}x}".format(int(entry), hex_length) for entry in words]
-
-    def concat_words_to_large(self, words):
-        n = self.n
-        hex_length = int(ceil(float(n) / 4))
-        nums = ["{0:0{1}x}".format(int(entry), hex_length) for entry in words]
-        final_string = "0x" + ''.join(nums)
-        return final_string
-
 
 class TestPoseidon:
     def __init__(self):
@@ -517,9 +474,6 @@ class TestPoseidon:
                            2282718626378751914, 9135548066699070411, 12944928807956425561, 7163864101456107046, 11238787894371406199, 5127616110315773831,
                            686796029394435381, 10252555620017577956, 4049365281189477258, 12051650887519205025, 4800482495413153474, 17372223444201748306,
                            14562129569856756327, 17224433102950452784, 6291582168674905221, 14690815140091267338, 15416014634650931155, 5239947128529250534]
-        assert poseidon.perm_original(input_words) == expected_output, f"{poseidon.perm_original(input_words)}"
-        assert poseidon.perm(input_words) == expected_output
+        assert poseidon.perm_original(input_words) == expected_output
+        assert poseidon(input_words) == expected_output
         return True
-
-if __name__ == "__main__":
-    TestPoseidon()
