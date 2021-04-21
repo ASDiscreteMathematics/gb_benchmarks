@@ -2,17 +2,17 @@
 
 import time
 
-
 class Poseidon:
     def __init__(self):
         # self.M = 128
-        self.N = 1536
-        self.t = 24
-        self.n = int(N / t)
-        self.R_F = 8 # 8
-        self.R_P = 42 # 42
-        self.prime = 2^64 - 2^8 - 1 # 0xfffffffffffffeff
-        self.F = GF(prime)
+        N = 1536
+        t = 24
+        n = int(N / t)
+        R_F = 8 # 8
+        R_P = 42 # 42
+        prime = 2^64 - 2^8 - 1 # 0xfffffffffffffeff
+        F = GF(prime)
+        self.N, self.t, self.n, self.R_F, self.R_P, self.prime, self.F = N, t, n, R_F, R_P, prime, F
 
         self.timer_start = 0
         self.timer_end = 0
@@ -315,238 +315,211 @@ class Poseidon:
                        '0x57d15c428b496288', '0x65145619b98d0cb3', '0x9b4a4f48dde636ba', '0x08740a600dc09d46', '0xbb132862b24cdd70', '0xf4547a7a98c78c49',
                        '0x75d6aade510d3184', '0x78f002115511f2e9', '0x61554fca09413122', '0xc6758a78edfc076a', '0x993dc19cb110e565', '0x6b5259f029a70694']]
 
-        self.MDS_matrix_field = matrix(F, [F(int(MDS_matrix[i][j], 16)) for j in range(t) for i in range(t)])
+        assert all([len(MDS_matrix[i]) == len(MDS_matrix) for i in range(len(MDS_matrix))]), f"MDS matrix is not square."
+        self.round_constants = round_constants
+        self.MDS_matrix = MDS_matrix
+        self.MDS_matrix_field = matrix(F, [[F(int(MDS_matrix[i][j], 16)) for j in range(t)] for i in range(t)])
+        assert self.MDS_matrix_field.is_square(), f"MDS matrix (field) is not square."
         self.round_constants_field = [F(int(r, 16)) for r in round_constants[:(R_F + R_P) * t]]
 
-def print_words_to_hex(words):
-    hex_length = int(ceil(float(n) / 4)) + 2 # +2 for "0x"
-    print(["{0:#0{1}x}".format(int(entry), hex_length) for entry in words])
+        self.round_constants_field_new = self._calc_equivalent_constants()
+        self.M_i, self.v_collection, self.w_hat_collection, self.M_0_0 = self._calc_equivalent_matrices()
 
-def print_concat_words_to_large(words):
-    hex_length = int(ceil(float(n) / 4))
-    nums = ["{0:0{1}x}".format(int(entry), hex_length) for entry in words]
-    final_string = "0x" + ''.join(nums)
-    print(final_string)
+    def _calc_equivalent_constants(self):
+        t, R_F, R_P, F = self.t, self.R_F, self.R_P, self.F
+        constants = self.round_constants_field
+        MDS_matrix_field_transpose = self.MDS_matrix_field.transpose()
+        constants_temp = [constants[index:index+t] for index in range(0, len(constants), t)]
 
-def calc_equivalent_constants(constants):
-    constants_temp = [constants[index:index+t] for index in range(0, len(constants), t)]
-    MDS_matrix_field_transpose = MDS_matrix_field.transpose()
+        # Start moving round constants up
+        # Calculate c_i' = M^(-1) * c_(i+1)
+        # Split c_i': Add c_i'[0] AFTER the S-box, add the rest to c_i
+        # I.e.: Store c_i'[0] for each of the partial rounds, and make c_i = c_i + c_i' (where now c_i'[0] = 0)
+        num_rounds = R_F + R_P
+        R_f = R_F / 2
+        for i in range(num_rounds - 2 - R_f, R_f - 1, -1):
+            MDS_inv = MDS_matrix_field_transpose.inverse()
+            inv_cip1 = list(vector(F, constants_temp[i+1]) * MDS_inv)
+            constants_temp[i] = list(vector(F, constants_temp[i]) + vector(F, [0] + inv_cip1[1:]))
+            constants_temp[i+1] = [inv_cip1[0]] + [0] * (t-1)
+        return constants_temp
 
-    # Start moving round constants up
-    # Calculate c_i' = M^(-1) * c_(i+1)
-    # Split c_i': Add c_i'[0] AFTER the S-box, add the rest to c_i
-    # I.e.: Store c_i'[0] for each of the partial rounds, and make c_i = c_i + c_i' (where now c_i'[0] = 0)
-    num_rounds = R_F + R_P
-    R_f = R_F / 2
-    for i in range(num_rounds - 2 - R_f, R_f - 1, -1):
-        inv_cip1 = list(vector(constants_temp[i+1]) * MDS_matrix_field_transpose.inverse())
-        constants_temp[i] = list(vector(constants_temp[i]) + vector([0] + inv_cip1[1:]))
-        constants_temp[i+1] = [inv_cip1[0]] + [0] * (t-1)
+    def _calc_equivalent_matrices(self):
+        # Following idea: Split M into M' * M'', where M'' is "cheap" and M' can move before the partial nonlinear layer
+        # The "previous" matrix layer is then M * M'. Due to the construction of M', the M[0,0] and v values will be the same for the new M' (and I also, obviously)
+        # Thus: Compute the matrices, store the w_hat and v_hat values
+        F, R_P, R_F, t = self.F, self.R_P, self.R_F, self.t
+        MDS_matrix_field_transpose = self.MDS_matrix_field.transpose()
 
-    return constants_temp
+        w_hat_collection = []
+        v_collection = []
+        v = MDS_matrix_field_transpose[[0], list(range(1,t))]
+        # print "M:", MDS_matrix_field_transpose
+        # print "v:", v
+        M_mul = MDS_matrix_field_transpose
+        M_i = matrix(F, t, t)
+        for i in range(R_P - 1, -1, -1):
+            M_hat = M_mul[list(range(1,t)), list(range(1,t))]
+            w = M_mul[list(range(1,t)), [0]]
+            v = M_mul[[0], list(range(1,t))]
+            v_collection.append(v.list())
+            w_hat = M_hat.inverse() * w
+            w_hat_collection.append(w_hat.list())
 
-def calc_equivalent_matrices():
-    # Following idea: Split M into M' * M'', where M'' is "cheap" and M' can move before the partial nonlinear layer
-    # The "previous" matrix layer is then M * M'. Due to the construction of M', the M[0,0] and v values will be the same for the new M' (and I also, obviously)
-    # Thus: Compute the matrices, store the w_hat and v_hat values
+            # Generate new M_i, and multiplication M * M_i for "previous" round
+            M_i = matrix.identity(t)
+            M_i[list(range(1,t)), list(range(1,t))] = M_hat
+            #M_mul = MDS_matrix_field_transpose * M_i
 
-    MDS_matrix_field_transpose = MDS_matrix_field.transpose()
+            test_mat = matrix(F, t, t)
+            test_mat[[0], list(range(0, t))] = MDS_matrix_field_transpose[[0], list(range(0, t))]
+            test_mat[[0], list(range(1, t))] = v
+            test_mat[list(range(1, t)), [0]] = w_hat
+            test_mat[list(range(1,t)), list(range(1,t))] = matrix.identity(t-1)
 
-    w_hat_collection = []
-    v_collection = []
-    v = MDS_matrix_field_transpose[[0], list(range(1,t))]
-    # print "M:", MDS_matrix_field_transpose
-    # print "v:", v
-    M_mul = MDS_matrix_field_transpose
-    M_i = matrix(F, t, t)
-    for i in range(R_P - 1, -1, -1):
-        M_hat = M_mul[list(range(1,t)), list(range(1,t))]
-        w = M_mul[list(range(1,t)), [0]]
-        v = M_mul[[0], list(range(1,t))]
-        v_collection.append(v.list())
-        w_hat = M_hat.inverse() * w
-        w_hat_collection.append(w_hat.list())
+            # print M_mul == M_i * test_mat
+            M_mul = MDS_matrix_field_transpose * M_i
+        return M_i, v_collection, w_hat_collection, MDS_matrix_field_transpose[0, 0]
 
-        # Generate new M_i, and multiplication M * M_i for "previous" round
-        M_i = matrix.identity(t)
-        M_i[list(range(1,t)), list(range(1,t))] = M_hat
-        #M_mul = MDS_matrix_field_transpose * M_i
+    def cheap_matrix_mul(self, state_words, v, w_hat):
+        t, M_0_0 = self.t, self.M_0_0
+        state_words_new = [0] * t
+        column_1 = [M_0_0] + w_hat
+        state_words_new[0] = sum([column_1[i] * state_words[i] for i in range(0, t)])
+        mul_row = [(state_words[0] * v[i]) for i in range(0, t-1)]
+        add_row = [(mul_row[i] + state_words[i+1]) for i in range(0, t-1)]
+        state_words_new = [state_words_new[0]] + add_row
+        return state_words_new
 
-        test_mat = matrix(F, t, t)
-        test_mat[[0], list(range(0, t))] = MDS_matrix_field_transpose[[0], list(range(0, t))]
-        test_mat[[0], list(range(1, t))] = v
-        test_mat[list(range(1, t)), [0]] = w_hat
-        test_mat[list(range(1,t)), list(range(1,t))] = matrix.identity(t-1)
+    def perm(self, input_words):
+        round_constants_field_new, MDS_matrix_field = self.round_constants_field_new, self.MDS_matrix_field
+        M_i, v_collection, w_hat_collection, M_0_0 = self.M_i, self.v_collection, self.w_hat_collection, self.M_0_0
+        t, R_F, R_P = self.t, self.R_F, self.R_P
 
-        # print M_mul == M_i * test_mat
-        M_mul = MDS_matrix_field_transpose * M_i
-        #return[M_i, test_mat]
+        self.timer_start = time.time()
 
+        R_f = int(R_F / 2)
 
-        #M_mul = MDS_matrix_field_transpose * M_i
-        #exit()
-    #exit()
+        round_constants_round_counter = 0
 
+        state_words = list(input_words)
 
-    # print [M_i, w_hat_collection, MDS_matrix_field_transpose[0, 0], v.list()]
-    return [M_i, v_collection, w_hat_collection, MDS_matrix_field_transpose[0, 0]]
-
-def cheap_matrix_mul(state_words, v, w_hat, M_0_0):
-    state_words_new = [0] * t
-    # row_1 = [M_0_0] + v
-    # print "r1:", row_1
-    # state_words_new[0] = sum([row_1[i] * state_words[i] for i in range(0, t)])
-    # mul_column = [(state_words[0] * w_hat[i]) for i in range(0, t-1)]
-    # add_column = [(mul_column[i] + state_words[i+1]) for i in range(0, t-1)]
-    # state_words_new = [state_words_new[0]] + add_column
-    # print "1:", state_words_new
-    column_1 = [M_0_0] + w_hat
-    state_words_new[0] = sum([column_1[i] * state_words[i] for i in range(0, t)])
-    mul_row = [(state_words[0] * v[i]) for i in range(0, t-1)]
-    add_row = [(mul_row[i] + state_words[i+1]) for i in range(0, t-1)]
-    state_words_new = [state_words_new[0]] + add_row
-
-    # test_mat = matrix(F, t, t)
-    # # print "r2:", matrix([M_0_0] + v).list()
-    # # print row_1 == matrix([M_0_0] + v).list()
-    # test_mat[[0], range(0, t)] = matrix([M_0_0] + v)
-    # test_mat[range(1, t), [0]] = matrix(w_hat).transpose()
-    # test_mat[range(1,t), range(1,t)] = matrix.identity(t-1)
-    # state_words_new = list(vector(state_words) * test_mat)
-    # print "2:", state_words_new
-
-    return state_words_new
-
-def perm(input_words):
-    round_constants_field_new = calc_equivalent_constants(round_constants_field)
-    [M_i, v_collection, w_hat_collection, M_0_0] = calc_equivalent_matrices()
-
-    global timer_start, timer_end
-
-    timer_start = time.time()
-
-    R_f = int(R_F / 2)
-
-    round_constants_round_counter = 0
-
-    state_words = list(input_words)
-
-    # First full rounds
-    for r in range(0, R_f):
-        # Round constants, nonlinear layer, matrix multiplication
-        for i in range(0, t):
-            state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-        for i in range(0, t):
-            state_words[i] = (state_words[i])^3
-        state_words = list(MDS_matrix_field * vector(state_words))
-        round_constants_round_counter += 1
-
-    # Middle partial rounds
-    # Initial constants addition
-    for i in range(0, t):
-        state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-    # First full matrix multiplication
-    state_words = list(vector(state_words) * M_i)
-    for r in range(0, R_P):
-        # Round constants, nonlinear layer, matrix multiplication
-        #state_words = list(vector(state_words) * M_i)
-        state_words[0] = (state_words[0])^3
-        # Moved constants addition
-        if r < (R_P - 1):
+        # First full rounds
+        for r in range(0, R_f):
+            # Round constants, nonlinear layer, matrix multiplication
+            for i in range(0, t):
+                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
+            for i in range(0, t):
+                state_words[i] = (state_words[i])^3
+            state_words = list(MDS_matrix_field * vector(state_words))
             round_constants_round_counter += 1
-            state_words[0] = state_words[0] + round_constants_field_new[round_constants_round_counter][0]
-        # Optimized multiplication with cheap matrices
-        state_words = cheap_matrix_mul(state_words, v_collection[R_P - r - 1], w_hat_collection[R_P - r - 1], M_0_0)
-    round_constants_round_counter += 1
 
-    # Last full rounds
-    for r in range(0, R_f):
-        # Round constants, nonlinear layer, matrix multiplication
+        # Middle partial rounds
+        # Initial constants addition
         for i in range(0, t):
             state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-        for i in range(0, t):
-            state_words[i] = (state_words[i])^3
-        state_words = list(MDS_matrix_field * vector(state_words))
+        # First full matrix multiplication
+        state_words = list(vector(state_words) * M_i)
+        for r in range(0, R_P):
+            # Round constants, nonlinear layer, matrix multiplication
+            #state_words = list(vector(state_words) * M_i)
+            state_words[0] = (state_words[0])^3
+            # Moved constants addition
+            if r < (R_P - 1):
+                round_constants_round_counter += 1
+                state_words[0] = state_words[0] + round_constants_field_new[round_constants_round_counter][0]
+            # Optimized multiplication with cheap matrices
+            state_words = self.cheap_matrix_mul(state_words, v_collection[R_P - r - 1], w_hat_collection[R_P - r - 1])
         round_constants_round_counter += 1
 
-    timer_end = time.time()
+        # Last full rounds
+        for r in range(0, R_f):
+            # Round constants, nonlinear layer, matrix multiplication
+            for i in range(0, t):
+                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
+            for i in range(0, t):
+                state_words[i] = (state_words[i])^3
+            state_words = list(MDS_matrix_field * vector(state_words))
+            round_constants_round_counter += 1
 
-    return state_words
+        self.timer_end = time.time()
 
-def perm_original(input_words):
-    round_constants_field_new = [round_constants_field[index:index+t] for index in range(0, len(round_constants_field), t)]
+        return state_words
 
-    global timer_start, timer_end
+    def perm_original(self, input_words):
+        round_constants_field, round_constants_field_new = self.round_constants_field, self.round_constants_field_new
+        t, R_F, R_P, MDS_matrix_field = self.t, self.R_F, self.R_P, self.MDS_matrix_field
 
-    timer_start = time.time()
+        round_constants_field_new = [round_constants_field[index:index+t] for index in range(0, len(round_constants_field), t)]
 
-    R_f = int(R_F / 2)
+        self.timer_start = time.time()
 
-    round_constants_round_counter = 0
+        R_f = int(R_F / 2)
 
-    state_words = list(input_words)
+        round_constants_round_counter = 0
 
-    # First full rounds
-    for r in range(0, R_f):
-        # Round constants, nonlinear layer, matrix multiplication
-        for i in range(0, t):
-            state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-        for i in range(0, t):
-            state_words[i] = (state_words[i])^3
-        state_words = list(MDS_matrix_field * vector(state_words))
-        round_constants_round_counter += 1
+        state_words = list(input_words)
 
-    # Middle partial rounds
-    for r in range(0, R_P):
-        # Round constants, nonlinear layer, matrix multiplication
-        for i in range(0, t):
-            state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-        state_words[0] = (state_words[0])^3
-        state_words = list(MDS_matrix_field * vector(state_words))
-        round_constants_round_counter += 1
+        # First full rounds
+        for r in range(0, R_f):
+            # Round constants, nonlinear layer, matrix multiplication
+            for i in range(0, t):
+                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
+            for i in range(0, t):
+                state_words[i] = (state_words[i])^3
+            state_words = list(MDS_matrix_field * vector(state_words))
+            round_constants_round_counter += 1
 
-    # Last full rounds
-    for r in range(0, R_f):
-        # Round constants, nonlinear layer, matrix multiplication
-        for i in range(0, t):
-            state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-        for i in range(0, t):
-            state_words[i] = (state_words[i])^3
-        state_words = list(MDS_matrix_field * vector(state_words))
-        round_constants_round_counter += 1
+        # Middle partial rounds
+        for r in range(0, R_P):
+            # Round constants, nonlinear layer, matrix multiplication
+            for i in range(0, t):
+                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
+            state_words[0] = (state_words[0])^3
+            state_words = list(MDS_matrix_field * vector(state_words))
+            round_constants_round_counter += 1
 
-    timer_end = time.time()
+        # Last full rounds
+        for r in range(0, R_f):
+            # Round constants, nonlinear layer, matrix multiplication
+            for i in range(0, t):
+                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
+            for i in range(0, t):
+                state_words[i] = (state_words[i])^3
+            state_words = list(MDS_matrix_field * vector(state_words))
+            round_constants_round_counter += 1
 
-    return state_words
+        self.timer_end = time.time()
 
-input_words = []
-for i in range(0, t):
-    input_words.append(F(i))
+        return state_words
 
-output_words = None
-num_iterations = 10
-total_time_passed = 0
-for i in range(0, num_iterations):
-    output_words = perm_original(input_words)
-    time_passed = timer_end - timer_start
-    total_time_passed += time_passed
-average_time = total_time_passed / float(num_iterations)
-print("Average time for unoptimized:", average_time)
+    def words_to_hex(self, words):
+        n = self.n
+        hex_length = int(ceil(float(n) / 4)) + 2 # +2 for "0x"
+        return ["{0:#0{1}x}".format(int(entry), hex_length) for entry in words]
 
-print("Input (concat):")
-print_concat_words_to_large(input_words)
-print("Output (concat):")
-print_concat_words_to_large(output_words)
+    def concat_words_to_large(self, words):
+        n = self.n
+        hex_length = int(ceil(float(n) / 4))
+        nums = ["{0:0{1}x}".format(int(entry), hex_length) for entry in words]
+        final_string = "0x" + ''.join(nums)
+        return final_string
 
-total_time_passed = 0
-for i in range(0, num_iterations):
-    output_words = perm(input_words)
-    time_passed = timer_end - timer_start
-    total_time_passed += time_passed
-average_time = total_time_passed / float(num_iterations)
-print("Average time for optimized:", average_time)
 
-print("Input (concat):")
-print_concat_words_to_large(input_words)
-print("Output (concat):")
-print_concat_words_to_large(output_words)
+class TestPoseidon:
+    def __init__(self):
+        assert self.regression_test()
+
+    def regression_test(self):
+        poseidon = Poseidon()
+        input_words = [poseidon.F(i) for i in range(poseidon.t)]
+        expected_output = [2395630374575380282, 1615974500016672975, 6465667013928772570, 15109795371388674146, 32373165242398276, 9330959482039670060,
+                           2282718626378751914, 9135548066699070411, 12944928807956425561, 7163864101456107046, 11238787894371406199, 5127616110315773831,
+                           686796029394435381, 10252555620017577956, 4049365281189477258, 12051650887519205025, 4800482495413153474, 17372223444201748306,
+                           14562129569856756327, 17224433102950452784, 6291582168674905221, 14690815140091267338, 15416014634650931155, 5239947128529250534]
+        assert poseidon.perm_original(input_words) == expected_output, f"{poseidon.perm_original(input_words)}"
+        assert poseidon.perm(input_words) == expected_output
+        return True
+
+if __name__ == "__main__":
+    TestPoseidon()
