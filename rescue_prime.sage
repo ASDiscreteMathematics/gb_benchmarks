@@ -162,7 +162,7 @@ class TestRescuePrime:
         digest_expected = [3926287221, 2034419010, 1395627778, 657779429]
         assert digest == digest_expected, f"Regression test of Rescue Prime has failed: found {digest}, not {digest_expected}"
 
-        assert test_rescue_prime_poly_system()
+        assert test_rescue_prime_last_squeeze_poly_system()
 
 def rescue_prime_last_squeeze_poly_system(rp, xs, hash_digest):
     m, rate, cap, alpha, N, MDS, round_constants = rp.m, rp.rate, rp.capacity, rp.alpha, rp.N, rp.MDS, rp.round_constants
@@ -196,7 +196,7 @@ def test_rescue_prime_last_squeeze_poly_system():
         rp = RescuePrime(p, m, cap, 128, N=N)
         ring = PolynomialRing(GF(p), 'z', m*N)
         hash_digest = rp.rescue_prime_hash(input_sequence)
-        system = rescue_prime_poly_system(rp, ring.gens(), hash_digest)
+        system = rescue_prime_last_squeeze_poly_system(rp, ring.gens(), hash_digest)
         inter_vals = [matrix([input_sequence + [0]*cap]).transpose()]
         for r in range(N):
             inter_vals += [rp.rescue_XLIX_permutation(inter_vals[-1], starting_round=r, num_rounds=1)]
