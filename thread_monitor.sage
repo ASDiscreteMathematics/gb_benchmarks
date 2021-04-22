@@ -17,11 +17,17 @@ class MemoryMonitor:
     def __init__(self):
         self.keep_measuring = True
 
-    def measure_usage(self):
+    def measure_usage(self, sleep_time=1, inform_every=None):
         max_usage = 0
+        ctr = 0
         while self.keep_measuring:
-            max_usage = max(max_usage, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-            sleep(0.1)
+            cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            max_usage = max(max_usage, cur_usage)
+            if inform_every and ctr >= inform_every:
+                ctr = 0
+                print(f"Current memory usage: {cur_usage}")
+            ctr += sleep_time
+            sleep(sleep_time)
         return max_usage
 
 class ExperimentStarter:
@@ -33,7 +39,7 @@ class ExperimentStarter:
     def __call__(self, primitive_name, prime):
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
-            mem_thread = executor.submit(monitor.measure_usage)
+            mem_thread = executor.submit(monitor.measure_usage, 2, 5)
             result = self.analyze_primitive(primitive_name, prime)
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
