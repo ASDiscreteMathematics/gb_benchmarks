@@ -66,6 +66,7 @@ class Gmimc:
 
 class TestGmimc:
     def __init__(self):
+        if get_verbose() >= 1: print(f"Testing GMiMC…")
         self._sym_actual_correspondance(5, [68, 10])
         self._sym_actual_correspondance(5, [12, 28, 74])
         self._sym_actual_correspondance(4, [11, 80, 55, 33])

@@ -434,8 +434,10 @@ class Poseidon:
 
 class TestPoseidon:
     def __init__(self):
+        if get_verbose() >= 1: print(f"Testing Poseidon…")
         assert self.regression_test()
         assert test_poseidon_last_squeeze_poly_system()
+        if get_verbose() >= 1: print(f"Testing of Poseidon completed")
 
     def regression_test(self):
         poseidon = Poseidon()

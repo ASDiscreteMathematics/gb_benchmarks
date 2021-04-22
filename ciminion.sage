@@ -140,6 +140,7 @@ class Ciminion:
 
 class TestCiminion:
     def __init__(self):
+        if get_verbose() >= 1: print(f"Testing Ciminion…")
         self._sym_actual_correspondance(4, 1)
         self._sym_actual_correspondance(6, 5)
         test_p_poly_system()

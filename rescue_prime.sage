@@ -151,6 +151,7 @@ class RescuePrime:
 
 class TestRescuePrime:
     def __init__(self):
+        if get_verbose() >= 1: print(f"Testing Rescue Prime…")
         p = previous_prime(2^32) # 2^129
         m = 8
         capacity = 4
@@ -163,6 +164,7 @@ class TestRescuePrime:
         assert digest == digest_expected, f"Regression test of Rescue Prime has failed: found {digest}, not {digest_expected}"
 
         assert test_rescue_prime_last_squeeze_poly_system()
+        if get_verbose() >= 1: print(f"Testing of Rescue Prime completed")
 
 def rescue_prime_last_squeeze_poly_system(rp, xs, hash_digest):
     m, rate, cap, alpha, N, MDS, round_constants = rp.m, rp.rate, rp.capacity, rp.alpha, rp.N, rp.MDS, rp.round_constants
