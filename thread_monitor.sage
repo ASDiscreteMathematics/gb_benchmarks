@@ -1,4 +1,5 @@
 import resource
+import fgb_sage
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
 
@@ -58,7 +59,8 @@ class ExperimentStarter:
             NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
-        gb = Ideal(system).groebner_basis()
+        gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+        gb = list(gb)
         return gb
 
     def poseidon_system(self, prime, num_rounds):
