@@ -36,23 +36,24 @@ class ExperimentStarter:
         self.capacity = 4
         self.input_sequence = [1, 2, 3]
 
-    def __call__(self, primitive_name, prime):
+    def __call__(self, primitive_name, prime, num_rounds):
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
             mem_thread = executor.submit(monitor.measure_usage, 2, 5)
-            result = self.analyze_primitive(primitive_name, prime)
+            fn_thread = executor.submit(self.analyze_primitive, primitive_name, prime, num_rounds)
+            result = fn_thread.result()
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
-            print(f"Resulting Gröbner basis:\n{result}")
-            print(f"Peak memory usage: {max_usage} KB")
+        print(f"Resulting Gröbner basis:\n{result}")
+        print(f"Peak memory usage: {max_usage} KB")
 
-    def analyze_primitive(self, primitive_name, prime):
+    def analyze_primitive(self, primitive_name, prime, num_rounds):
         if primitive_name == "poseidon":
-            system = self.poseidon_system(prime)
+            system = self.poseidon_system(prime, num_rounds)
         elif primitive_name == "rescue":
-            system = self.rescue_system(prime)
+            system = self.rescue_system(prime, num_rounds)
         elif primitive_name == "gmimc":
-            system = self.gmimc_system(prime)
+            system = self.gmimc_system(prime, num_rounds)
         elif primitive_name == "ciminion":
             NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
@@ -60,7 +61,7 @@ class ExperimentStarter:
         gb = Ideal(system).groebner_basis()
         return gb
 
-    def poseidon_system(self, prime):
+    def poseidon_system(self, prime, num_rounds):
         R_F, R_P = 2, 1
         t = self.rate + self.capacity
         poseidon = Poseidon(prime=prime, R_F=R_F, R_P=R_P, t=t)
@@ -69,16 +70,15 @@ class ExperimentStarter:
         system = poseidon_last_squeeze_poly_system(poseidon, ring.gens(), hash_digest)
         return system
 
-    def rescue_system(self, prime):
-        N = 1
+    def rescue_system(self, prime, num_rounds):
         m = self.rate + self.capacity
-        rp = RescuePrime(prime, m, self.capacity, 128, N=N)
-        ring = PolynomialRing(GF(prime), 'x', m*N)
+        rp = RescuePrime(prime, m, self.capacity, 128, N=num_rounds)
+        ring = PolynomialRing(GF(prime), 'x', m*num_rounds)
         hash_digest = rp.rescue_prime_hash(self.input_sequence)
         system = rescue_prime_last_squeeze_poly_system(rp, ring.gens(), hash_digest)
         return system
 
-    def gmimc_system(self, prime):
+    def gmimc_system(self, prime, num_rounds):
         constants = [11, 80, 55, 33]
         ring = PolynomialRing(GF(101), 'x', len(constants))
         gmimc = Gmimc(ring, 3, 42, constants, 3, round_keys=ring.gens())
@@ -101,6 +101,4 @@ if __name__ == "__main__":
     prime_big = previous_prime(2^128)
 
     es = ExperimentStarter()
-    es("poseidon", 101)
-    es("rescue", 101)
-    es("gmimc", 101)
+    es(primitive_name, prime, num_rounds)
