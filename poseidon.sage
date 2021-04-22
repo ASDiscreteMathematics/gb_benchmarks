@@ -435,6 +435,7 @@ class Poseidon:
 class TestPoseidon:
     def __init__(self):
         assert self.regression_test()
+        assert test_poseidon_last_squeeze_poly_system()
 
     def regression_test(self):
         poseidon = Poseidon()
@@ -443,6 +444,60 @@ class TestPoseidon:
                            2282718626378751914, 9135548066699070411, 12944928807956425561, 7163864101456107046, 11238787894371406199, 5127616110315773831,
                            686796029394435381, 10252555620017577956, 4049365281189477258, 12051650887519205025, 4800482495413153474, 17372223444201748306,
                            14562129569856756327, 17224433102950452784, 6291582168674905221, 14690815140091267338, 15416014634650931155, 5239947128529250534]
-        assert poseidon.perm_original(input_words) == expected_output
-        assert poseidon(input_words) == expected_output
+        assert poseidon.perm_original(input_words) == expected_output, f"Standard permutation behaves differently from reference implementation."
+        assert poseidon(input_words) == expected_output, f"Enhanced permutation behaves differently from reference implementation."
         return True
+
+def poseidon_last_squeeze_poly_system(poseidon, xs, hash_digest):
+    t, R_F, R_P = poseidon.t, poseidon.R_F, poseidon.R_P
+    round_constants_field, MDS_matrix_field = poseidon.round_constants_field, poseidon.MDS_matrix_field
+    num_rounds = R_F + R_P
+    rate = len(hash_digest)
+    cap = t - rate
+    system = []
+    for r in range(num_rounds):
+        if r == 0: # first round
+            curr_state = list(xs[:rate]) + [0]*cap
+        else:
+            curr_state = xs[(r+0)*t-cap:(r+1)*t-cap]
+        curr_state = [curr_state[i] + round_constants_field[r][i] for i in range(t)]
+        if r < (R_F // 2) or r >= (R_F // 2) + R_P: # full round
+            curr_state = [curr_state[i]^3 for i in range(t)]
+        else: # partial round
+            curr_state[0] = curr_state[0]^3
+        curr_state = list(MDS_matrix_field * vector(curr_state))
+        if r < num_rounds - 1:
+            next_state = xs[(r+1)*t-cap:(r+2)*t-cap]
+        else: # last round
+            next_state = hash_digest + list(xs[(r+1)*t-cap:(r+1)*t])
+        system += [n - c for n, c in zip(next_state, curr_state)]
+    return system
+
+def test_poseidon_last_squeeze_poly_system():
+    for prime, R_F, R_P, t, rate in [(101, 2, 1, 5, 3), (1021, 2, 2, 4, 3), (9973, 2, 2, 2, 1)]:
+        cap = t - rate
+        input_sequence = list(range(rate)) + [0]*cap
+        poseidon = Poseidon(prime=prime, R_F=R_F, R_P=R_P, t=t)
+        hash_digest = poseidon(input_sequence)[:rate]
+        ring = PolynomialRing(GF(prime), 'x', (R_F + R_P)*t)
+        system = poseidon_last_squeeze_poly_system(poseidon, ring.gens(), hash_digest)
+        inter_vals = [input_sequence]
+        curr_state = input_sequence
+        for r in range(R_F + R_P):
+            curr_state = [curr_state[i] + poseidon.round_constants_field[r][i] for i in range(t)]
+            if r < (R_F // 2) or r >= (R_F // 2) + R_P: # full round
+                curr_state = [curr_state[i]^3 for i in range(t)]
+            else: # partial round
+                curr_state[0] = curr_state[0]^3
+            curr_state = list(poseidon.MDS_matrix_field * vector(curr_state))
+            inter_vals += [curr_state]
+        inter_vals = flatten([flatten(iv) for iv in inter_vals])
+        assert inter_vals[-t:-cap] == hash_digest, f"expected hash {hash_digest}, but found {inter_vals[-t:-cap]}."
+        inter_vals = inter_vals[:rate] + inter_vals[t:] # cut out initial capacity
+        inter_vals = inter_vals[:-t] + inter_vals[-cap:] # cut out the hash digest
+        assert not any([p(inter_vals) for p in system]), f"The polynomial system for Poseidon appears to be wrong."
+        gb = Ideal(system).groebner_basis()
+        assert not any([p(inter_vals) for p in gb]), f"The Gröbner basis for Poseidon appears to be wrong."
+        # Building the variety is too expensive
+        # var = Ideal(gb).variety()
+    return True
