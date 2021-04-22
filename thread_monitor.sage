@@ -1,4 +1,5 @@
 import sys
+import pathlib
 import resource
 import fgb_sage
 from time import sleep
@@ -20,17 +21,18 @@ class MemoryMonitor:
     def __init__(self):
         self.keep_measuring = True
 
-    def measure_usage(self, sleep_time=1, inform_every=None):
+    def measure_usage(self, sleep_time=1, result_path=None):
         max_usage = 0
-        ctr = 0
+        result_file = sys.stdout
+        if result_path:
+            result_file = open(result_path + "mem.txt", 'w')
         while self.keep_measuring:
             cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             max_usage = max(max_usage, cur_usage)
-            if inform_every and ctr >= inform_every:
-                ctr = 0
-                print(f"Current memory usage: {cur_usage}")
-            ctr += sleep_time
+            result_file.write(f"{cur_usage},")
             sleep(sleep_time)
+        if result_path:
+            result_file.close()
         return max_usage
 
 class ExperimentStarter:
@@ -42,17 +44,22 @@ class ExperimentStarter:
 
     def __call__(self, primitive_name, prime, num_rounds):
         if get_verbose() >= 1: print(f"Starting experiment '{primitive_name}' over F_{prime} with {num_rounds} rounds.")
+        self.result_path = f"./experiments/{primitive_name}_{num_rounds}_"
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
-            mem_thread = executor.submit(monitor.measure_usage, 2, 5)
+            mem_thread = executor.submit(monitor.measure_usage, 2, self.result_path)
             if get_verbose() >= 2: print(f"Memory measuring thread started.")
             fn_thread = executor.submit(self.analyze_primitive, primitive_name, prime, num_rounds)
             if get_verbose() >= 2: print(f"Analysis thread started.")
-            result = fn_thread.result()
+            gb = fn_thread.result()
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
-        print(f"Resulting Gröbner basis:\n{result}")
-        print(f"Peak memory usage: {max_usage} KB")
+        with open(self.result_path + "gb.txt", 'w') as f:
+            for p in gb:
+                f.write(f"{p}\n")
+        with open(self.result_path + "summary.txt", 'w') as f:
+            f.write("A summary will be found here in due time.\n")
+        self.result_path = None # reset
 
     def analyze_primitive(self, primitive_name, prime, num_rounds):
         if get_verbose() >= 2: print(f"Retrieving polynomial system for {primitive_name}…")
@@ -67,9 +74,9 @@ class ExperimentStarter:
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
         if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
-        with open('./tmp.txt', 'w') as f:
+        with open(self.result_path + "fgb_debug.txt", 'w') as f:
             with stderr_redirector(f):
-                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1)
         gb = list(gb)
         return gb
 
@@ -127,6 +134,8 @@ if __name__ == "__main__":
         prime = prime_big
     else:
         raise ValueError("Specify either 's' for the small prime or 'b' for the big prime.")
+
+    pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
 
     es = ExperimentStarter()
     es(primitive_name, prime, num_rounds)
