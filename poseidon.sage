@@ -307,8 +307,8 @@ class Poseidon:
         self.MDS_matrix_field = matrix(F, [[F(int(MDS_matrix[i][j], 16)) for j in range(t)] for i in range(t)])
         assert self.MDS_matrix_field.is_square(), f"MDS matrix (field) is not square."
         self.round_constants_field = [F(int(r, 16)) for r in round_constants[:(R_F + R_P) * t]]
-
         self.round_constants_field_new = self._calc_equivalent_constants()
+        self.round_constants_field = [self.round_constants_field[index:index+t] for index in range(0, len(self.round_constants_field), t)]
         self.M_i, self.v_collection, self.w_hat_collection, self.M_0_0 = self._calc_equivalent_matrices()
 
     def __call__(self, input_words):
@@ -421,46 +421,15 @@ class Poseidon:
         return state_words
 
     def perm_original(self, input_words):
-        round_constants_field, round_constants_field_new = self.round_constants_field, self.round_constants_field_new
-        t, R_F, R_P, MDS_matrix_field = self.t, self.R_F, self.R_P, self.MDS_matrix_field
-
-        round_constants_field_new = [round_constants_field[index:index+t] for index in range(0, len(round_constants_field), t)]
-
-        R_f = int(R_F / 2)
-
-        round_constants_round_counter = 0
-
+        t, R_F, R_P, MDS_matrix_field, round_constants_field = self.t, self.R_F, self.R_P, self.MDS_matrix_field, self.round_constants_field
         state_words = list(input_words)
-
-        # First full rounds
-        for r in range(0, R_f):
-            # Round constants, nonlinear layer, matrix multiplication
-            for i in range(0, t):
-                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-            for i in range(0, t):
-                state_words[i] = (state_words[i])^3
+        for r in range(R_F + R_P):
+            state_words = [state_words[i] + round_constants_field[r][i] for i in range(t)]
+            if r < (R_F // 2) or r >= (R_F // 2 + R_P): # full round
+                state_words = [state_words[i]^3 for i in range(t)]
+            else: # partial round
+                state_words[0] = state_words[0]^3
             state_words = list(MDS_matrix_field * vector(state_words))
-            round_constants_round_counter += 1
-
-        # Middle partial rounds
-        for r in range(0, R_P):
-            # Round constants, nonlinear layer, matrix multiplication
-            for i in range(0, t):
-                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-            state_words[0] = (state_words[0])^3
-            state_words = list(MDS_matrix_field * vector(state_words))
-            round_constants_round_counter += 1
-
-        # Last full rounds
-        for r in range(0, R_f):
-            # Round constants, nonlinear layer, matrix multiplication
-            for i in range(0, t):
-                state_words[i] = state_words[i] + round_constants_field_new[round_constants_round_counter][i]
-            for i in range(0, t):
-                state_words[i] = (state_words[i])^3
-            state_words = list(MDS_matrix_field * vector(state_words))
-            round_constants_round_counter += 1
-
         return state_words
 
 class TestPoseidon:
