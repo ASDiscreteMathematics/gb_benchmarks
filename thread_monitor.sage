@@ -1,3 +1,4 @@
+import sys
 import resource
 import fgb_sage
 from time import sleep
@@ -106,6 +107,18 @@ if __name__ == "__main__":
 
     prime_small = previous_prime(10^4)
     prime_big = previous_prime(2^128)
+
+    if len(sys.argv) <= 3:
+        print("Not enough arguments. Please provide primitive_name, num_rounds, one of \{'s', 'b'\} for the prime.")
+        exit(-1)
+    primitive_name = sys.argv[1]
+    num_rounds = int(sys.argv[2])
+    if sys.argv[3] == 's':
+        prime = prime_small
+    elif sys.argv[3] == 'b':
+        prime = prime_big
+    else:
+        raise ValueError("Specify either 's' for the small prime or 'b' for the big prime.")
 
     es = ExperimentStarter()
     es(primitive_name, prime, num_rounds)
