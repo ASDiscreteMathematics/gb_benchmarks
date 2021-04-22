@@ -38,10 +38,13 @@ class ExperimentStarter:
         self.input_sequence = [1, 2, 3]
 
     def __call__(self, primitive_name, prime, num_rounds):
+        if get_verbose() >= 1: print(f"Starting experiment '{primitive_name}' over F_{prime} with {num_rounds} rounds.")
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
             mem_thread = executor.submit(monitor.measure_usage, 2, 5)
+            if get_verbose() >= 2: print(f"Memory measuring thread started.")
             fn_thread = executor.submit(self.analyze_primitive, primitive_name, prime, num_rounds)
+            if get_verbose() >= 2: print(f"Analysis thread started.")
             result = fn_thread.result()
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
@@ -49,6 +52,7 @@ class ExperimentStarter:
         print(f"Peak memory usage: {max_usage} KB")
 
     def analyze_primitive(self, primitive_name, prime, num_rounds):
+        if get_verbose() >= 2: print(f"Retrieving polynomial system for {primitive_name}…")
         if primitive_name == "poseidon":
             system = self.poseidon_system(prime, num_rounds)
         elif primitive_name == "rescue":
@@ -59,6 +63,7 @@ class ExperimentStarter:
             NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
+        if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
         gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
         gb = list(gb)
         return gb
