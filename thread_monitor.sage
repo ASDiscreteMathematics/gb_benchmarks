@@ -31,7 +31,14 @@ class ExperimentStarter:
         self.input_sequence = [1, 2, 3]
 
     def __call__(self, primitive_name, prime):
-        self.start_experiment(primitive_name, prime)
+        with ThreadPoolExecutor() as executor:
+            monitor = MemoryMonitor()
+            mem_thread = executor.submit(monitor.measure_usage)
+            result = self.analyze_primitive(primitive_name, prime)
+            monitor.keep_measuring = False
+            max_usage = mem_thread.result()
+            print(f"Resulting Gröbner basis:\n{result}")
+            print(f"Peak memory usage: {max_usage} KB")
 
     def analyze_primitive(self, primitive_name, prime):
         if primitive_name == "poseidon":
@@ -70,16 +77,6 @@ class ExperimentStarter:
         gmimc = Gmimc(ring, 3, 42, constants, 3, round_keys=ring.gens())
         system = gmimc(self.input_sequence, use_supplied_round_keys=True)
         return system
-
-    def start_experiment(self, primitive_name, prime):
-        with ThreadPoolExecutor() as executor:
-            monitor = MemoryMonitor()
-            mem_thread = executor.submit(monitor.measure_usage)
-            result = self.analyze_primitive(primitive_name, prime)
-            monitor.keep_measuring = False
-            max_usage = mem_thread.result()
-            print(f"Resulting Gröbner basis:\n{result}")
-            print(f"Peak memory usage: {max_usage} KB")
 
 if __name__ == "__main__":
     set_verbose(1)
