@@ -2,6 +2,7 @@ import sys
 import resource
 import fgb_sage
 from time import sleep
+from stdout_redirector import stderr_redirector
 from concurrent.futures import ThreadPoolExecutor
 
 load('gmimc.sage')
@@ -65,7 +66,9 @@ class ExperimentStarter:
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
         if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
-        gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+        with open('./tmp.txt', 'w') as f:
+            with stderr_redirector(f):
+                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
         gb = list(gb)
         return gb
 
