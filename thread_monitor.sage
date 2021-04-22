@@ -47,8 +47,8 @@ class ExperimentStarter:
             system = self.rescue_system(prime)
         elif primitive_name == "gmimc":
             system = self.gmimc_system(prime)
-        elif primitive_name == "plookup":
-            pass
+        elif primitive_name == "ciminion":
+            NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
         gb = Ideal(system).groebner_basis()
@@ -64,8 +64,9 @@ class ExperimentStarter:
         return system
 
     def rescue_system(self, prime):
-        m, cap, N = 7, 4, 1
-        rp = RescuePrime(prime, m, cap, 128, N=N)
+        N = 1
+        m = self.rate + self.capacity
+        rp = RescuePrime(prime, m, self.capacity, 128, N=N)
         ring = PolynomialRing(GF(prime), 'x', m*N)
         hash_digest = rp.rescue_prime_hash(self.input_sequence)
         system = rescue_prime_last_squeeze_poly_system(rp, ring.gens(), hash_digest)
