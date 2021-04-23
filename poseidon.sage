@@ -456,23 +456,29 @@ def poseidon_last_squeeze_poly_system(poseidon, xs, hash_digest):
     num_rounds = R_F + R_P
     rate = len(hash_digest)
     cap = t - rate
-    system = []
-    for r in range(num_rounds):
-        if r == 0: # first round
-            curr_state = list(xs[:rate]) + [0]*cap
-        else:
-            curr_state = xs[(r+0)*t-cap:(r+1)*t-cap]
+    system = [xs[i + rate] - (xs[i] + round_constants_field[0][i])^3 for i in range(rate)] # ralating input and after-S-Box of first round
+    curr_state = [xs[i + rate] for i in range(rate)] + [round_constants_field[0][i]^3 for i in range(rate, t)] # state just before first MDS matrix
+    curr_state = list(MDS_matrix_field * vector(curr_state)) # first (full) round complete
+    xs_idx = 2*rate # index of next unused variable
+    for r in range(1, num_rounds-1):
         curr_state = [curr_state[i] + round_constants_field[r][i] for i in range(t)]
         if r < (R_F // 2) or r >= (R_F // 2) + R_P: # full round
             curr_state = [curr_state[i]^3 for i in range(t)]
+            system += [xs[xs_idx + i] - curr_state[i] for i in range(t)]
+            curr_state = xs[xs_idx:xs_idx + t]
+            xs_idx += t
         else: # partial round
             curr_state[0] = curr_state[0]^3
+            system += [xs[xs_idx] - curr_state[0]]
+            curr_state[0] = xs[xs_idx]
+            xs_idx += 1
         curr_state = list(MDS_matrix_field * vector(curr_state))
-        if r < num_rounds - 1:
-            next_state = xs[(r+1)*t-cap:(r+2)*t-cap]
-        else: # last round
-            next_state = hash_digest + list(xs[(r+1)*t-cap:(r+1)*t])
-        system += [n - c for n, c in zip(next_state, curr_state)]
+    # last round
+    curr_state = [curr_state[i] + round_constants_field[-1][i] for i in range(t)]
+    curr_state = [curr_state[i]^3 for i in range(t)]
+    final_state = hash_digest + [xs[xs_idx + i] for i in range(cap)]
+    final_state = list(MDS_matrix_field.inverse() * vector(final_state))
+    system += [final_state[i] - curr_state[i] for i in range(t)]
     return system
 
 def test_poseidon_last_squeeze_poly_system():
@@ -481,7 +487,7 @@ def test_poseidon_last_squeeze_poly_system():
         input_sequence = list(range(rate)) + [0]*cap
         poseidon = Poseidon(prime=prime, R_F=R_F, R_P=R_P, t=t)
         hash_digest = poseidon(input_sequence)[:rate]
-        ring = PolynomialRing(GF(prime), 'x', (R_F + R_P)*t)
+        ring = PolynomialRing(GF(prime), 'x', t*R_F + R_P - cap)
         system = poseidon_last_squeeze_poly_system(poseidon, ring.gens(), hash_digest)
         inter_vals = [input_sequence]
         curr_state = input_sequence
@@ -489,13 +495,17 @@ def test_poseidon_last_squeeze_poly_system():
             curr_state = [curr_state[i] + poseidon.round_constants_field[r][i] for i in range(t)]
             if r < (R_F // 2) or r >= (R_F // 2) + R_P: # full round
                 curr_state = [curr_state[i]^3 for i in range(t)]
+                if r < R_F + R_P - 1: # don't add last round's values before but after applying the MDS matrix
+                    inter_vals += [curr_state]
             else: # partial round
                 curr_state[0] = curr_state[0]^3
+                inter_vals += [[curr_state[0]]]
             curr_state = list(poseidon.MDS_matrix_field * vector(curr_state))
-            inter_vals += [curr_state]
+        inter_vals += [curr_state]
         inter_vals = flatten([flatten(iv) for iv in inter_vals])
         assert inter_vals[-t:-cap] == hash_digest, f"expected hash {hash_digest}, but found {inter_vals[-t:-cap]}."
         inter_vals = inter_vals[:rate] + inter_vals[t:] # cut out initial capacity
+        inter_vals = inter_vals[:2*rate] + inter_vals[2*rate+cap:] # cut out values in first round after S-Box for capacity-branches
         inter_vals = inter_vals[:-t] + inter_vals[-cap:] # cut out the hash digest
         assert not any([p(inter_vals) for p in system]), f"The polynomial system for Poseidon appears to be wrong."
         gb = Ideal(system).groebner_basis()
