@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import ctypes
 import io
 import os, sys
-import tempfile
 
 libc = ctypes.CDLL(None)
 c_stdout = ctypes.c_void_p.in_dll(libc, 'stdout')
@@ -24,23 +23,17 @@ def stdout_redirector(stream):
         # Make original_stdout_fd point to the same file as to_fd
         os.dup2(to_fd, original_stdout_fd)
         # Create a new sys.stdout that points to the redirected fd
-        sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, 'wb'))
+        sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, 'wb', buffering=0), line_buffering=False, write_through=True)
 
     # Save a copy of the original stdout fd in saved_stdout_fd
     saved_stdout_fd = os.dup(original_stdout_fd)
     try:
         # Create a temporary file and redirect stdout to it
-        tfile = tempfile.TemporaryFile(mode='w+b')
-        _redirect_stdout(tfile.fileno())
+        _redirect_stdout(stream.fileno())
         # Yield to caller, then redirect stdout back to the saved fd
         yield
         _redirect_stdout(saved_stdout_fd)
-        # Copy contents of temporary file to the given stream
-        tfile.flush()
-        tfile.seek(0, io.SEEK_SET)
-        stream.write(tfile.read().decode('ascii'))
     finally:
-        tfile.close()
         os.close(saved_stdout_fd)
 
 @contextmanager
@@ -57,21 +50,15 @@ def stderr_redirector(stream):
         # Make original_stderr_fd point to the same file as to_fd
         os.dup2(to_fd, original_stderr_fd)
         # Create a new sys.stdout that points to the redirected fd
-        sys.stderr = io.TextIOWrapper(os.fdopen(original_stderr_fd, 'wb'))
+        sys.stderr = io.TextIOWrapper(os.fdopen(original_stderr_fd, 'wb', buffering=0), line_buffering=False, write_through=True)
 
     # Save a copy of the original stdout fd in saved_stdout_fd
     saved_stderr_fd = os.dup(original_stderr_fd)
     try:
         # Create a temporary file and redirect stderr to it
-        tfile = tempfile.TemporaryFile(mode='w+b')
-        _redirect_stderr(tfile.fileno())
+        _redirect_stderr(stream.fileno())
         # Yield to caller, then redirect stderr back to the saved fd
         yield
         _redirect_stderr(saved_stderr_fd)
-        # Copy contents of temporary file to the given stream
-        tfile.flush()
-        tfile.seek(0, io.SEEK_SET)
-        stream.write(tfile.read().decode('ascii'))
     finally:
-        tfile.close()
         os.close(saved_stderr_fd)

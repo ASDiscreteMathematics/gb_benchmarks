@@ -29,7 +29,8 @@ class MemoryMonitor:
         while self.keep_measuring:
             cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             max_usage = max(max_usage, cur_usage)
-            result_file.write(f"{cur_usage},")
+            result_file.write(f"{cur_usage}\n")
+            result_file.flush()
             sleep(sleep_time)
         if result_path:
             result_file.close()
@@ -49,9 +50,7 @@ class ExperimentStarter:
             monitor = MemoryMonitor()
             mem_thread = executor.submit(monitor.measure_usage, 2, self.result_path)
             if get_verbose() >= 2: print(f"Memory measuring thread started.")
-            fn_thread = executor.submit(self.analyze_primitive, primitive_name, prime, num_rounds)
-            if get_verbose() >= 2: print(f"Analysis thread started.")
-            gb = fn_thread.result()
+            gb = self.analyze_primitive(primitive_name, prime, num_rounds)
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
         with open(self.result_path + "gb.txt", 'w') as f:
@@ -73,10 +72,10 @@ class ExperimentStarter:
             NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
-        if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
-        with open(self.result_path + "fgb_debug.txt", 'w') as f:
-            with stderr_redirector(f):
-                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1)
+        with open(self.result_path + "fgb_debug.txt", 'w+b', buffering=0) as f, stderr_redirector(f):
+            if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
+            gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1) # matrix_bound=10**8
+        if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
         gb = list(gb)
         return gb
 
