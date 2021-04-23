@@ -510,6 +510,7 @@ def test_poseidon_last_squeeze_poly_system():
         assert not any([p(inter_vals) for p in system]), f"The polynomial system for Poseidon appears to be wrong."
         gb = Ideal(system).groebner_basis()
         assert not any([p(inter_vals) for p in gb]), f"The Gröbner basis for Poseidon appears to be wrong."
-        # Building the variety is too expensive
-        # var = Ideal(gb).variety()
+    # Building the variety is generally too expensive. For the last set of parameters, it's okay, though.
+    var = Ideal(gb).variety()
+    assert inter_vals in [list(el.values())[::-1] for el in var], f"The variety does not contain the intermediate values."
     return True
