@@ -192,6 +192,25 @@ def rescue_prime_last_squeeze_poly_system(rp, xs, hash_digest):
         system += [n[0] - c[0] for n, c in zip(next_state.rows(), curr_state.rows())]
     return system
 
+def rescue_prime_last_squeeze_trace(rp, preimage):
+    m, rate, cap, alpha, alphainv, N, MDS, round_constants = rp.m, rp.rate, rp.capacity, rp.alpha, rp.alphainv, rp.N, rp.MDS, rp.round_constants
+    assert len(preimage) == rate, f"The hash preimage needs to be of length {rate} (is {len(preimage)})."
+    MDS_inv = MDS.inverse()
+    trace = copy(preimage)
+    state = matrix(preimage + [0]*cap).transpose()
+    for r in range(N):
+        # forward half-round
+        state = matrix([el[0]^alpha for el in state.rows()]).transpose()
+        state = MDS * state + matrix(round_constants[(2*r+0)*m:(2*r+1)*m]).transpose()
+        # second half-round, also forward
+        state = matrix([el[0]^alphainv for el in state.rows()]).transpose()
+        state = MDS * state + matrix(round_constants[(2*r+1)*m:(2*r+2)*m]).transpose()
+        if r < N - 1: # not last round
+            trace.extend(el[0] for el in state.rows())
+        else: # last round
+            trace.extend(el[0] for el in state.rows()[rate:m])
+    return trace
+
 def test_rescue_prime_last_squeeze_poly_system():
     for p, m, cap, N in [(101, 7, 4, 2), (1021, 8, 6, 4), (9973, 9, 2, 5)]:
         input_sequence = list(range(m-cap))
@@ -199,12 +218,9 @@ def test_rescue_prime_last_squeeze_poly_system():
         ring = PolynomialRing(GF(p), 'z', m*N)
         hash_digest = rp.rescue_prime_hash(input_sequence)
         system = rescue_prime_last_squeeze_poly_system(rp, ring.gens(), hash_digest)
-        inter_vals = [matrix([input_sequence + [0]*cap]).transpose()]
-        for r in range(N):
-            inter_vals += [rp.rescue_XLIX_permutation(inter_vals[-1], starting_round=r, num_rounds=1)]
-        inter_vals = flatten([flatten(c) for iv in inter_vals for c in iv.columns()])
-        assert inter_vals[-m:-cap] == hash_digest, f"expected hash {hash_digest}, but found {inter_vals[-m:-cap]}."
-        inter_vals = inter_vals[:m-cap] + inter_vals[m:] # cut out initial capacity
-        inter_vals = inter_vals[:-m] + inter_vals[-cap:] # cut out the hash digest
-        assert not any(p(inter_vals) for p in system), f"Polynomial system and its concrete evaluation don't correspond."
+        trace = rescue_prime_last_squeeze_trace(rp, input_sequence)
+        for p in system:
+            assert p(trace) == 0, f"Polynomial evaluated at trace does not equal zero!"
+            print("ok.")
     return True
+
