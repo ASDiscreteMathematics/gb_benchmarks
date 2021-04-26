@@ -21,19 +21,15 @@ class MemoryMonitor:
     def __init__(self):
         self.keep_measuring = True
 
-    def measure_usage(self, sleep_time=1, result_path=None):
+    def measure_usage(self, debug_path, sleep_time=1):
         max_usage = 0
-        result_file = sys.stdout
-        if result_path:
-            result_file = open(result_path + "mem.txt", 'w')
-        while self.keep_measuring:
-            cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            max_usage = max(max_usage, cur_usage)
-            result_file.write(f"{cur_usage}\n")
-            result_file.flush()
-            sleep(sleep_time)
-        if result_path:
-            result_file.close()
+        with open(debug_path + "mem.txt", 'w') as debug_file:
+            while self.keep_measuring:
+                cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                max_usage = max(max_usage, cur_usage)
+                debug_file.write(f"{cur_usage}\n")
+                debug_file.flush()
+                sleep(sleep_time)
         return max_usage
 
 class ExperimentStarter:
@@ -48,7 +44,7 @@ class ExperimentStarter:
         self.result_path = f"./experiments/{primitive_name}_{num_rounds}_"
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
-            mem_thread = executor.submit(monitor.measure_usage, 2, self.result_path)
+            mem_thread = executor.submit(monitor.measure_usage, result_path, 1)
             if get_verbose() >= 2: print(f"Memory measuring thread started.")
             gb = self.analyze_primitive(primitive_name, prime, num_rounds)
             monitor.keep_measuring = False
