@@ -41,22 +41,23 @@ class ExperimentStarter:
 
     def __call__(self, primitive_name, prime, num_rounds):
         if get_verbose() >= 1: print(f"Starting experiment '{primitive_name}' over F_{prime} with {num_rounds} rounds.")
-        self.result_path = f"./experiments/{primitive_name}_{num_rounds}_"
+        result_path = f"./experiments/{primitive_name}_{num_rounds}_"
         with ThreadPoolExecutor() as executor:
             monitor = MemoryMonitor()
             mem_thread = executor.submit(monitor.measure_usage, result_path, 1)
             if get_verbose() >= 2: print(f"Memory measuring thread started.")
-            gb = self.analyze_primitive(primitive_name, prime, num_rounds)
+            system = self.get_system(primitive_name, prime, num_rounds)
+            gb_thread = executor.submit(self.compute_gb, system, result_path)
+            gb = gb_thread.result()
             monitor.keep_measuring = False
             max_usage = mem_thread.result()
-        with open(self.result_path + "gb.txt", 'w') as f:
+        with open(result_path + "gb.txt", 'w') as f:
             for p in gb:
                 f.write(f"{p}\n")
-        with open(self.result_path + "summary.txt", 'w') as f:
+        with open(result_path + "summary.txt", 'w') as f:
             f.write("A summary will be found here in due time.\n")
-        self.result_path = None # reset
 
-    def analyze_primitive(self, primitive_name, prime, num_rounds):
+    def get_system(self, primitive_name, prime, num_rounds):
         if get_verbose() >= 2: print(f"Retrieving polynomial system for {primitive_name}…")
         if primitive_name == "poseidon":
             system = self.poseidon_system(prime, num_rounds)
@@ -68,12 +69,7 @@ class ExperimentStarter:
             NotImplementedError(f"Getting the polynomial system for Ciminion is work in progress.")
         else:
             raise ValueError(f"No primitive with name {primitive_name} defined.")
-        with open(self.result_path + "fgb_debug.txt", 'w+b', buffering=0) as f, stderr_redirector(f):
-            if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
-            gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1) # matrix_bound=10**8
-        if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
-        gb = list(gb)
-        return gb
+        return system
 
     def poseidon_system(self, prime, num_rounds):
         R_F, R_P = num_rounds
@@ -98,6 +94,13 @@ class ExperimentStarter:
         gmimc = Gmimc(ring, 3, 42, constants, 3, round_keys=ring.gens())
         system = gmimc(self.input_sequence, use_supplied_round_keys=True)
         return system
+
+    def compute_gb(self, system, debug_path):
+        with open(debug_path + "fgb_debug.txt", 'w+b', buffering=0) as f, stderr_redirector(f):
+            if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
+            gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1) # matrix_bound=10**8
+        if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
+        return list(gb)
 
 if __name__ == "__main__":
     set_verbose(1)
