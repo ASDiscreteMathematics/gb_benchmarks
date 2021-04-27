@@ -125,41 +125,53 @@ if __name__ == "__main__":
         TestCiminion()
         if get_verbose() >= 1: print(f"Testing of primitives done.")
 
+    pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
     prime_small = previous_prime(10^4)
     prime_big = previous_prime(2^128)
 
-    if len(sys.argv) <= 3:
-        print("Not enough arguments. Please provide primitive_name, num_rounds, one of {'s', 'b'} for small / big prime.")
+    if len(sys.argv) <= 2:
+        print("Not enough arguments. Please provide primitive_name and one of {'s', 'b'} for small / big prime.")
         exit()
     primitive_name = sys.argv[1]
-    if primitive_name == "poseidon":
-        num_rounds = [int(i) for i in sys.argv[2].split(',')]
-        assert len(num_rounds) == 2, f"Poseidon takes exactly two round numbers, not {sys.argv[2]}."
-    else:
-        num_rounds = int(sys.argv[2])
-    if sys.argv[3] == 's':
+    if sys.argv[2] == 's':
         prime = prime_small
-    elif sys.argv[3] == 'b':
+    elif sys.argv[2] == 'b':
         prime = prime_big
     else:
         raise ValueError("Specify either 's' for the small prime or 'b' for the big prime.")
 
-    pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
-    result_path = f"./experiments/{primitive_name}_{prime}_{num_rounds}_"
+    if sys.argv[1] == "poseidon":
+        assert len(sys.argv) >= 3, f"When running the poseidon experiment, make sure to additionally specifiy the number of partial rounds."
+        num_part_rounds = int(sys.argv[3])
+        assert num_part_rounds >= 1, f"The number of partial rounds needs to be positive, not {num_part_rounds}."
 
-    monitor = MemoryMonitor(result_path)
-    es = ExperimentStarter(result_path)
+    r = 1
+    memory_exhausted = False
+    while not memory_exhausted:
+        num_rounds = r
+        if primitive_name == "poseidon":
+            num_rounds = (2*r, num_part_rounds)
 
-    exp_process = Process(target=es, args=(primitive_name, prime, num_rounds))
-    exp_process.start()
-    if get_verbose() >= 2: print(f"Experiment process started.")
+        result_path = f"./experiments/{primitive_name}_{prime}_{num_rounds}_"
 
-    mem_parent_pipe, mem_child_pipe = Pipe()
-    mem_process = Process(target=monitor.measure_usage, args=(exp_process.pid, mem_child_pipe))
-    mem_process.start()
-    if get_verbose() >= 2: print(f"Memory measuring process started.")
+        monitor = MemoryMonitor(result_path)
+        es = ExperimentStarter(result_path)
+        exp_process = Process(target=es, args=(primitive_name, prime, num_rounds))
+        exp_process.start()
+        if get_verbose() >= 2: print(f"Experiment process started… ({num_rounds} rounds)")
 
-    exp_process.join()
-    mem_process.join()
-    max_usage = mem_parent_pipe.recv()
-    print(f"max memory usage: {max_usage}")
+        mem_parent_pipe, mem_child_pipe = Pipe()
+        mem_process = Process(target=monitor.measure_usage, args=(exp_process.pid, mem_child_pipe))
+        mem_process.start()
+        if get_verbose() >= 2: print(f"Memory measuring process started… ({num_rounds} rounds)")
+
+        exp_process.join()
+        mem_process.join()
+        max_usage = mem_parent_pipe.recv()
+        print(f"max memory usage: {max_usage}\n")
+        if exp_process.exitcode < 0:
+            if get_verbose() >= 2: print(f"Experiment process has terminated with exit code {exp_process.exitcode}")
+            memory_exhausted = True
+        else:
+            r += 1
+    if get_verbose() >= 2: print(f"Finished with this line of experiments. Reached round {num_rounds} but couldn't complete it.")
