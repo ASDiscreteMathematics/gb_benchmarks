@@ -1,10 +1,11 @@
+import os
 import sys
 import pathlib
-import resource
 import fgb_sage
+import subprocess
 from time import sleep
+from multiprocessing import Process, Pipe
 from stdout_redirector import stderr_redirector
-from concurrent.futures import ThreadPoolExecutor
 
 load('gmimc.sage')
 load('poseidon.sage')
@@ -18,39 +19,49 @@ load('ciminion.sage')
 # • Does this adhere to expectaions?
 
 class MemoryMonitor:
-    def __init__(self):
-        self.keep_measuring = True
+    def check_pid(self, pid):
+        """ Check For the existence of a unix pid. """
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        else:
+            return True
 
-    def measure_usage(self, debug_path, sleep_time=1):
+    def __init__(self, debug_path, sleep_time=1):
+        self.debug_path = debug_path
+        self.sleep_time = sleep_time
+        self.max_usage = 0
+
+    def measure_usage(self, pid, pipe):
+        debug_path, sleep_time = self.debug_path, self.sleep_time
         max_usage = 0
         with open(debug_path + "mem.txt", 'w') as debug_file:
-            while self.keep_measuring:
-                cur_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                max_usage = max(max_usage, cur_usage)
-                debug_file.write(f"{cur_usage}\n")
-                debug_file.flush()
-                sleep(sleep_time)
+            while self.check_pid(pid):
+                ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "rss="], capture_output=True, text=True)
+                if self.check_pid(pid): # make sure that ps returns parseable output: process to maesure has to live before and after running ps
+                    cur_usage = int(ps_res.stdout)
+                    max_usage = max(max_usage, cur_usage)
+                    debug_file.write(f"{cur_usage}\n")
+                    debug_file.flush()
+                    sleep(sleep_time)
+        self.max_usage = max_usage
+        pipe.send(max_usage)
         return max_usage
 
 class ExperimentStarter:
-    def __init__(self, rate=3, capacity=4, input_sequence=[1,2,3]):
+    def __init__(self, result_path, rate=3, capacity=4, input_sequence=[1,2,3]):
         assert len(input_sequence) == rate, f"Indicated rate and length of input sequence don't correspond ({rate} vs {len(input_sequence)})."
+        self.result_path = result_path
         self.rate = rate
         self.capacity = capacity
         self.input_sequence = input_sequence
 
     def __call__(self, primitive_name, prime, num_rounds):
+        result_path = self.result_path
         if get_verbose() >= 1: print(f"Starting experiment '{primitive_name}' over F_{prime} with {num_rounds} rounds.")
-        result_path = f"./experiments/{primitive_name}_{num_rounds}_"
-        with ThreadPoolExecutor() as executor:
-            monitor = MemoryMonitor()
-            mem_thread = executor.submit(monitor.measure_usage, result_path, 1)
-            if get_verbose() >= 2: print(f"Memory measuring thread started.")
-            system = self.get_system(primitive_name, prime, num_rounds)
-            gb_thread = executor.submit(self.compute_gb, system, result_path)
-            gb = gb_thread.result()
-            monitor.keep_measuring = False
-            max_usage = mem_thread.result()
+        system = self.get_system(primitive_name, prime, num_rounds)
+        gb = self.compute_gb(system, result_path)
         with open(result_path + "gb.txt", 'w') as f:
             for p in gb:
                 f.write(f"{p}\n")
@@ -134,6 +145,21 @@ if __name__ == "__main__":
         raise ValueError("Specify either 's' for the small prime or 'b' for the big prime.")
 
     pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
+    result_path = f"./experiments/{primitive_name}_{prime}_{num_rounds}_"
 
-    es = ExperimentStarter()
-    es(primitive_name, prime, num_rounds)
+    monitor = MemoryMonitor(result_path)
+    es = ExperimentStarter(result_path)
+
+    exp_process = Process(target=es, args=(primitive_name, prime, num_rounds))
+    exp_process.start()
+    if get_verbose() >= 2: print(f"Experiment process started.")
+
+    mem_parent_pipe, mem_child_pipe = Pipe()
+    mem_process = Process(target=monitor.measure_usage, args=(exp_process.pid, mem_child_pipe))
+    mem_process.start()
+    if get_verbose() >= 2: print(f"Memory measuring process started.")
+
+    exp_process.join()
+    mem_process.join()
+    max_usage = mem_parent_pipe.recv()
+    print(f"max memory usage: {max_usage}")
