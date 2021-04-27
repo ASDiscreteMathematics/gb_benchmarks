@@ -116,6 +116,7 @@ class ExperimentStarter:
 if __name__ == "__main__":
     set_verbose(1)
     testing = False
+    prime = fgb_sage.MAX_PRIME
 
     if testing:
         if get_verbose() >=1: print(f"Testing primitives…")
@@ -126,23 +127,12 @@ if __name__ == "__main__":
         if get_verbose() >= 1: print(f"Testing of primitives done.")
 
     pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
-    prime_small = previous_prime(10^4)
-    prime_big = previous_prime(2^128)
 
-    if len(sys.argv) <= 2:
-        print("Not enough arguments. Please provide primitive_name and one of {'s', 'b'} for small / big prime.")
-        exit()
+    assert len(sys.argv) >= 2, f"Not enough arguments. Please provide primitive_name."
     primitive_name = sys.argv[1]
-    if sys.argv[2] == 's':
-        prime = prime_small
-    elif sys.argv[2] == 'b':
-        prime = prime_big
-    else:
-        raise ValueError("Specify either 's' for the small prime or 'b' for the big prime.")
-
     if sys.argv[1] == "poseidon":
         assert len(sys.argv) >= 3, f"When running the poseidon experiment, make sure to additionally specifiy the number of partial rounds."
-        num_part_rounds = int(sys.argv[3])
+        num_part_rounds = int(sys.argv[2])
         assert num_part_rounds >= 1, f"The number of partial rounds needs to be positive, not {num_part_rounds}."
 
     r = 1
