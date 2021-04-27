@@ -50,7 +50,7 @@ class MemoryMonitor:
         return max_usage
 
 class ExperimentStarter:
-    def __init__(self, result_path, rate=3, capacity=4, input_sequence=[1,2,3]):
+    def __init__(self, result_path, rate=1, capacity=1, input_sequence=[42]):
         assert len(input_sequence) == rate, f"Indicated rate and length of input sequence don't correspond ({rate} vs {len(input_sequence)})."
         self.result_path = result_path
         self.rate = rate
