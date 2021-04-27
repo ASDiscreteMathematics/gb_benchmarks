@@ -114,7 +114,7 @@ class ExperimentStarter:
         return list(gb)
 
 if __name__ == "__main__":
-    set_verbose(1)
+    set_verbose(4)
     testing = False
     prime = fgb_sage.MAX_PRIME
 
