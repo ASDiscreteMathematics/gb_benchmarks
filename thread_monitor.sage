@@ -113,6 +113,44 @@ class ExperimentStarter:
         if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
         return list(gb)
 
+def parse_fgb_debug(file_path):
+    degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg = [], [], 0, 0, 0, 0, ""
+    f4_line = None
+    timing_line = None
+    with open(file_path) as file:
+        for line in file.readlines():
+            if not f4_line and len(line) > 0 and line[0] == '[':
+                f4_line = line.strip()
+            if not timing_line and len(line) > 13 and line[:13] == "Elapsed time:":
+                timing_line = line.strip()
+    if not f4_line: return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
+    for step in f4_line.split('['):
+        if len(step) <= 0: continue
+        if step[-1] != '/' and step[-1] != '}':
+            error_msg += step
+            continue
+        d, step = step.split('](')
+        degrees += [int(d)]
+        dim, step = step.split(')')
+        n, m = dim.split('x')
+        matrix_dims += [(int(n), int(m))]
+        if step[-1] == '/': continue # no timing information for a matrix this small
+        _, step = step.split('%/{') # discard progress indicators of gaussing matrix
+        if 1 + step.find('}{'):
+            lin_or_sym, sym_or_lin = step.split('}{')
+        else: # fill with dummy data for more streamlined processing
+            lin_or_sym, sym_or_lin = step, "S=0.0sec}"
+        for los in [lin_or_sym, sym_or_lin]:
+            los = los.strip('{').strip('}').strip('sec').strip()
+            los, t = los.split('=')
+            if los == 'L': time_lin += float(t)
+            if los == 'S': time_sym += float(t)
+    if timing_line:
+        tot, sal = timing_line.strip("Elapsed time:").strip("(Total/Symb+Linalg)").strip().split('/')
+        time_total = float(tot.strip('s'))
+        time_sym_and_lin = float(sal.strip('s'))
+    return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
+
 if __name__ == "__main__":
     set_verbose(4)
     testing = False
@@ -158,6 +196,7 @@ if __name__ == "__main__":
         exp_process.join()
         mem_process.join()
         max_usage = mem_parent_pipe.recv()
+        print(f"fgb debug info:   {parse_fgb_debug(result_path + 'fgb_debug.txt')}")
         print(f"max memory usage: {max_usage}\n")
         if exp_process.exitcode < 0:
             if get_verbose() >= 2: print(f"Experiment process has terminated with exit code {exp_process.exitcode}")
