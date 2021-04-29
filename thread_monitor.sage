@@ -3,7 +3,7 @@ import sys
 import pathlib
 import fgb_sage
 import subprocess
-from time import sleep
+from time import sleep, process_time
 from multiprocessing import Process, Pipe
 from stdout_redirector import stderr_redirector
 
@@ -60,13 +60,38 @@ class ExperimentStarter:
     def __call__(self, primitive_name, prime, num_rounds):
         result_path = self.result_path
         if get_verbose() >= 1: print(f"Starting experiment '{primitive_name}' over F_{prime} with {num_rounds} rounds.")
+        time_sys = process_time()
         system = self.get_system(primitive_name, prime, num_rounds)
+        time_sys = process_time() - time_sys
+        with open(result_path + "sys.txt", 'w') as f:
+            for p in system:
+                f.write(f"{p}\n")
+        # summary: preliminary
+        with open(result_path + "summary.txt", 'w') as f:
+            f.write(f"macaulay bound:    {1 + sum([p.degree() - 1 for p in system])}\n")
+            f.write(f"time system:       {time_sys}\n")
+            f.write(f"len system:        {len(system)}\n")
+            sys_degs = [p.degree() for p in system]
+            f.write(f"max deg in system: {max(sys_degs)}\n")
+            sys_histogram = {x: sys_degs.count(x) for x in range(min(sys_degs), max(sys_degs)+1)}
+            f.write(f"deg histogram:     {sys_histogram}\n")
+            f.write(f"#coeffs in system: {sum([len(p.coefficients()) for p in system])}\n")
+        time_gb = process_time()
         gb = self.compute_gb(system, result_path)
+        time_gb = process_time() - time_gb
         with open(result_path + "gb.txt", 'w') as f:
             for p in gb:
                 f.write(f"{p}\n")
-        with open(result_path + "summary.txt", 'w') as f:
-            f.write("A summary will be found here in due time.\n")
+        # summary: stuff about the Gröbner basis
+        with open(result_path + "summary.txt", 'a') as f:
+            f.write(f" –––\n")
+            f.write(f"time gb:           {time_gb}\n")
+            f.write(f"len gb:            {len(gb)}\n")
+            gb_degs = [p.degree() for p in gb]
+            f.write(f"max deg in gb:     {max(gb_degs)}\n")
+            gb_histogram = {x: gb_degs.count(x) for x in range(min(gb_degs), max(gb_degs)+1)}
+            f.write(f"deg histogram:     {gb_histogram}\n")
+            f.write(f"#coeffs in gb:     {sum([len(p.coefficients()) for p in gb])}\n")
 
     def get_system(self, primitive_name, prime, num_rounds):
         if get_verbose() >= 2: print(f"Retrieving polynomial system for {primitive_name}…")
@@ -111,7 +136,7 @@ class ExperimentStarter:
             if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=1) # matrix_bound=10**8
         if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
-        return list(gb)
+        return gb
 
 def parse_fgb_debug(file_path):
     degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg = [], [], 0, 0, 0, 0, ""
@@ -181,6 +206,7 @@ if __name__ == "__main__":
             num_rounds = (2*r, num_part_rounds)
 
         result_path = f"./experiments/{primitive_name}_{prime}_{num_rounds}_"
+        exp_time = process_time()
 
         monitor = MemoryMonitor(result_path)
         es = ExperimentStarter(result_path)
@@ -195,12 +221,29 @@ if __name__ == "__main__":
 
         exp_process.join()
         mem_process.join()
-        max_usage = mem_parent_pipe.recv()
-        print(f"fgb debug info:   {parse_fgb_debug(result_path + 'fgb_debug.txt')}")
-        print(f"max memory usage: {max_usage}\n")
+        exp_time = process_time() - exp_time
+        max_usage = int(mem_parent_pipe.recv())
+        degrees, matrix_dims, time_lin, time_sym, time_fgb_total, time_sym_and_lin, error_msg = parse_fgb_debug(result_path + 'fgb_debug.txt')
+        # summary: memory and degrees reached
+        with open(result_path + "summary.txt", 'a') as f:
+            f.write(f" –––\n")
+            f.write(f"total exp time:    {exp_time}\n")
+            f.write(f"max memory usage:  {max_usage} bytes\n")
+            f.write(f"           that's  {n(max_usage / 1024**3)} GiB\n")
+            f.write(f"FGb's…\n")
+            f.write(f"  …total time:     {time_fgb_total}\n")
+            f.write(f"  …biggest matrix: {max(matrix_dims, key=lambda el: el[0]*el[1])}\n")
+            f.write(f"  …max degree:     {max([-1] + degrees)}\n")
+            f.write(f"  …error msg:      '{error_msg}'\n")
+        # failure conditions
+        if len(error_msg) > 0:
+            print(f"[!] FGb threw an error: {error_msg}")
+            print(f"[!] Consider increasing 'matrix_bound' and re-running the experiment.")
+            memory_exhausted = True
         if exp_process.exitcode < 0:
             if get_verbose() >= 2: print(f"Experiment process has terminated with exit code {exp_process.exitcode}")
             memory_exhausted = True
         else:
+            print()
             r += 1
     if get_verbose() >= 2: print(f"Finished with this line of experiments. Reached round {num_rounds} but couldn't complete it.")
