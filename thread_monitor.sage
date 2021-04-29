@@ -196,7 +196,7 @@ if __name__ == "__main__":
     if sys.argv[1] == "poseidon":
         assert len(sys.argv) >= 3, f"When running the poseidon experiment, make sure to additionally specifiy the number of partial rounds."
         num_part_rounds = int(sys.argv[2])
-        assert num_part_rounds >= 1, f"The number of partial rounds needs to be positive, not {num_part_rounds}."
+        assert num_part_rounds >= 0, f"The number of partial rounds needs to be non-negative, not {num_part_rounds}."
 
     r = 1
     memory_exhausted = False
