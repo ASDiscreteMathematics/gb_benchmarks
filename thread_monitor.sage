@@ -151,25 +151,42 @@ def parse_fgb_debug(file_path):
     if not f4_line: return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
     for step in f4_line.split('['):
         if len(step) <= 0: continue
-        if step[-1] != '/' and step[-1] != '}':
+        if not 1 + step.find(']'):
             error_msg += step
             continue
-        d, step = step.split('](')
+        if len(step.strip().split(']')) == 1:
+            d = step.strip().strip(']')
+            degrees += [int(d)]
+            continue
+        d, step = step.split(']')
         degrees += [int(d)]
+        if not 1 + step.find(')'):
+            error_msg += step
+            continue
+        if len(step.strip().split(')')) == 1:
+            n, m = step.strip('(').strip(')').split('x')
+            matrix_dims += [(int(n), int(m))]
+            continue
         dim, step = step.split(')')
-        n, m = dim.split('x')
+        n, m = dim.strip('(').split('x')
         matrix_dims += [(int(n), int(m))]
-        if step[-1] == '/': continue # no timing information for a matrix this small
-        _, step = step.split('%/{') # discard progress indicators of gaussing matrix
+        if len(step) < 5 or step[-5:] == "100%/": continue # no timing information
+        if not 1 + step.find('100%/{'):
+            error_msg += step
+            continue
+        _, step = step.split('100%/{') # discard progress indicators of gaussing matrix
         if 1 + step.find('}{'):
-            lin_or_sym, sym_or_lin = step.split('}{')
-        else: # fill with dummy data for more streamlined processing
-            lin_or_sym, sym_or_lin = step, "S=0.0sec}"
+            lin_or_sym, sym_or_lin, step = step.split('}')
+        else:
+            lin_or_sym, step = step.split('}')
+            sym_or_lin = r"{L=0.0}" # dummy data for more streamlined processing
         for los in [lin_or_sym, sym_or_lin]:
             los = los.strip('{').strip('}').strip('sec').strip()
             los, t = los.split('=')
             if los == 'L': time_lin += float(t)
             if los == 'S': time_sym += float(t)
+        if len(step.strip()) > 0:
+            error_msg += step
     if timing_line:
         tot, sal = timing_line.strip("Elapsed time:").strip("(Total/Symb+Linalg)").strip().split('/')
         time_total = float(tot.strip('s'))
@@ -232,6 +249,9 @@ if __name__ == "__main__":
             f.write(f"           that's  {n(max_usage / 1024**3)} GiB\n")
             f.write(f"FGb's…\n")
             f.write(f"  …total time:     {time_fgb_total}\n")
+            f.write(f"  …symb+linalg:    {time_sym_and_lin}\n")
+            f.write(f"  …symb (steps):   {time_sym}\n")
+            f.write(f"  …lin  (steps):   {time_lin}\n")
             f.write(f"  …biggest matrix: {max(matrix_dims, key=lambda el: el[0]*el[1])}\n")
             f.write(f"  …max degree:     {max([-1] + degrees)}\n")
             f.write(f"  …error msg:      '{error_msg}'\n")
