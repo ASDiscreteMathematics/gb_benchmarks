@@ -212,7 +212,7 @@ def rescue_prime_last_squeeze_trace(rp, preimage):
     return trace
 
 def test_rescue_prime_last_squeeze_poly_system():
-    for p, m, cap, N in [(101, 7, 4, 2), (1021, 8, 6, 4), (9973, 9, 2, 5)]:
+    for p, m, cap, N in [(65519, 2, 1, 1), (101, 7, 4, 2), (1021, 8, 6, 4), (9973, 9, 2, 5)]:
         input_sequence = list(range(m-cap))
         rp = RescuePrime(p, m, cap, 128, N=N)
         ring = PolynomialRing(GF(p), 'z', m*N)

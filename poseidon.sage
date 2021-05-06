@@ -514,7 +514,7 @@ def poseidon_last_squeeze_trace(poseidon, preimage):
     return trace
 
 def test_poseidon_last_squeeze_poly_system():
-    for prime, R_F, R_P, t, rate in [(101, 2, 1, 5, 3), (1021, 2, 2, 4, 3), (9973, 2, 2, 2, 1)]:
+    for prime, R_F, R_P, t, rate in [(65519, 2, 0, 2, 1), (101, 2, 1, 5, 3), (1021, 2, 2, 4, 3), (9973, 2, 2, 2, 1)]:
         cap = t - rate
         input_sequence = list(range(rate)) + [0]*cap
         poseidon = Poseidon(prime=prime, R_F=R_F, R_P=R_P, t=t)
