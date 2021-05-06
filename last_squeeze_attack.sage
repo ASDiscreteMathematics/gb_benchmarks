@@ -83,8 +83,15 @@ class ExperimentStarter:
             for p in gb:
                 f.write(f"{p}\n")
         # summary: stuff about the Gröbner basis
+        pid = os.getpid()
+        ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "cputimes="], capture_output=True, text=True)
+        cputimes = int(ps_res.stdout)
+        ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "etimes="], capture_output=True, text=True)
+        etimes = int(ps_res.stdout)
         with open(result_path + "summary.txt", 'a') as f:
             f.write(f" –––\n")
+            f.write(f"cpu time:          {cputimes}s\n")
+            f.write(f"wall time:         {etimes}s\n")
             f.write(f"time gb:           {time_gb}\n")
             f.write(f"len gb:            {len(gb)}\n")
             gb_degs = [p.degree() for p in gb]
