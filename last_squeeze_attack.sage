@@ -203,7 +203,8 @@ def parse_fgb_debug(file_path):
 if __name__ == "__main__":
     set_verbose(4)
     testing = False
-    prime = fgb_sage.MAX_PRIME
+    prime = previous_prime(fgb_sage.MAX_PRIME)
+    assert gcd(3, prime - 1) == 1, f"Exponent 3 does not give a permutation with the current prime {prime}."
 
     if testing:
         if get_verbose() >=1: print(f"Testing primitives…")
