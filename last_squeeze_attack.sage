@@ -79,9 +79,6 @@ class ExperimentStarter:
         time_gb = process_time()
         gb = self.compute_gb(system, result_path)
         time_gb = process_time() - time_gb
-        with open(result_path + "gb.txt", 'w') as f:
-            for p in gb:
-                f.write(f"{p}\n")
         # summary: stuff about the Gröbner basis
         pid = os.getpid()
         ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "cputimes="], capture_output=True, text=True)
