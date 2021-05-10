@@ -250,8 +250,8 @@ if __name__ == "__main__":
         with open(result_path + "summary.txt", 'a') as f:
             f.write(f" –––\n")
             f.write(f"total exp time:    {exp_time}\n")
-            f.write(f"max memory usage:  {max_usage} bytes\n")
-            f.write(f"           that's  {n(max_usage / 1024**3)} GiB\n")
+            f.write(f"max memory usage:  {max_usage} KiB\n")
+            f.write(f"           that's  {n(max_usage / 1024**2)} GiB\n")
             f.write(f"FGb's…\n")
             f.write(f"  …total time:     {time_fgb_total}\n")
             f.write(f"  …symb+linalg:    {time_sym_and_lin}\n")
