@@ -3,7 +3,7 @@ import sys
 import pathlib
 import fgb_sage
 import subprocess
-from time import sleep, process_time
+from time import sleep, process_time, time
 from multiprocessing import Process, Pipe
 from stdout_redirector import stderr_redirector
 
@@ -228,7 +228,7 @@ if __name__ == "__main__":
             num_rounds = (2*r, num_part_rounds)
 
         result_path = f"./experiments/{primitive_name}_{prime}_{num_rounds}_"
-        exp_time = process_time()
+        exp_time = time()
 
         monitor = MemoryMonitor(result_path)
         es = ExperimentStarter(result_path)
@@ -243,7 +243,7 @@ if __name__ == "__main__":
 
         exp_process.join()
         mem_process.join()
-        exp_time = process_time() - exp_time
+        exp_time = time() - exp_time
         max_usage = int(mem_parent_pipe.recv())
         degrees, matrix_dims, time_lin, time_sym, time_fgb_total, time_sym_and_lin, error_msg = parse_fgb_debug(result_path + 'fgb_debug.txt')
         # summary: memory and degrees reached
