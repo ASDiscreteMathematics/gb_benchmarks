@@ -138,7 +138,7 @@ class ExperimentStarter:
     def compute_gb(self, system, debug_path):
         with open(debug_path + "fgb_debug.txt", 'w+b', buffering=0) as f, stderr_redirector(f):
             if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
-            gb = fgb_sage.groebner_basis(system, threads=64, verbosity=1) # matrix_bound=10**8
+            gb = fgb_sage.groebner_basis(system, threads=64, verbosity=1, matrix_bound=10**7)
         if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
         return gb
 
